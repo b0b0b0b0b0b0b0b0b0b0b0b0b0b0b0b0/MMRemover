@@ -16,11 +16,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Objects;
 
 public class MainWindow extends JFrame {
     private JList<String> inputList;
     private JList<String> outputList;
+    private Path pluginsDir = Paths.get("input");
     private JTextArea consoleArea;
     private final Conf conf;
 
@@ -42,7 +45,7 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.12)");
+        setTitle("MMRemover (v1.14)");
         setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -69,7 +72,7 @@ public class MainWindow extends JFrame {
         JPanel inputPanel = new JPanel(new BorderLayout());
         inputPanel.setBackground(COLOR_PANEL_TITLE_BG);
         inputList = new JList<>();
-        inputList.setCellRenderer(new FileListCellRenderer(new File("input").getAbsolutePath(), conf));
+        inputList.setCellRenderer(new FileListCellRenderer(new File(pluginsDir.toString()).getAbsolutePath(), conf));
         JScrollPane inputScrollPane = new JScrollPane(inputList);
         inputPanel.add(inputScrollPane, BorderLayout.CENTER);
         UIManagerUtil.styleTitledBorder(inputPanel, conf.getTranslation("inputPanelTitle"));
@@ -114,7 +117,6 @@ public class MainWindow extends JFrame {
         clearConsoleButton.setBackground(COLOR_DELETE_BG);
         clearConsoleButton.setForeground(Color.WHITE);
 
-        // Добавляем кнопки в secondaryButtonPanel
         secondaryButtonPanel.add(refreshFilesButton);
         secondaryButtonPanel.add(openInputFolderButton);
         secondaryButtonPanel.add(openOutputFolderButton);
@@ -122,7 +124,6 @@ public class MainWindow extends JFrame {
         secondaryButtonPanel.add(clearOutputListButton);
         secondaryButtonPanel.add(clearConsoleButton);
 
-        // ====== linkPanel ======
         JPanel linkPanel = new JPanel(new BorderLayout());
         linkPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         linkPanel.setBackground(COLOR_LINK_PANEL_BG);
@@ -144,6 +145,31 @@ public class MainWindow extends JFrame {
             System.err.println(conf.getTranslation("Icon_not_found") + ": " + e.getMessage());
         }
 
+        JButton botCheckButton = new JButton("<HTML><U>" + conf.getTranslation("bot_bm") + "</U></HTML>");
+        botCheckButton.setForeground(COLOR_VISIT_LINK_FG);
+        botCheckButton.setBorderPainted(false);
+        botCheckButton.setOpaque(false);
+        botCheckButton.setBackground(null);
+        botCheckButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        try {
+            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bot.png")));
+            Image img = icon.getImage();
+            Image scaledImg = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
+            ImageIcon scaledIcon = new ImageIcon(scaledImg);
+            botCheckButton.setIcon(scaledIcon);
+        } catch (Exception e) {
+            System.err.println("Icon not found: " + e.getMessage());
+        }
+
+        botCheckButton.addActionListener(e -> {
+            try {
+                Desktop.getDesktop().browse(new URI("https://bm.wtf/bot"));
+            } catch (IOException | URISyntaxException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         visitWebsiteButton.setVerticalTextPosition(SwingConstants.CENTER);
         visitWebsiteButton.setVerticalAlignment(SwingConstants.CENTER);
 
@@ -155,15 +181,20 @@ public class MainWindow extends JFrame {
             }
         });
 
-        linkPanel.add(visitWebsiteButton, BorderLayout.EAST);
+        JPanel linksBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        linksBox.setOpaque(false);
+        linksBox.add(botCheckButton);
+        linksBox.add(visitWebsiteButton);
+
+        linkPanel.add(linksBox, BorderLayout.EAST);
         bottomPanel.add(secondaryButtonPanel, BorderLayout.CENTER);
         bottomPanel.add(linkPanel, BorderLayout.SOUTH);
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
-        DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, "input", this::refreshFilesList, conf);
+        DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
         DragAndDropHandler.addDragAndDropSupport(outputList);
         refreshFilesButton.addActionListener(e -> {
             logCurrentDirectory(conf.getTranslation("refreshFiles"));
-            refreshFilesList(inputList, "input");
+            refreshFilesList(inputList, pluginsDir.toString());
             refreshFilesList(outputList, "out");
         });
 
@@ -176,19 +207,19 @@ public class MainWindow extends JFrame {
                 @Override
                 protected Void doInBackground() {
                     logCurrentDirectory("Запуск очистки для всех типов вирусов...");
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "hostflow", consoleArea, conf);
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "artemka", consoleArea, conf);
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "bstatsjar", consoleArea, conf);
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "pluginmetrics", consoleArea, conf);
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "aph", consoleArea, conf);
-                    FileProcessor.processFiles(new File("input").toPath(), new File("out").toPath(), "chbkHack", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "hostflow", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "artemka", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "bstatsjar", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "pluginmetrics", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "aph", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "chbkHack", consoleArea, conf);
                     return null;
                 }
 
                 @Override
                 protected void done() {
                     long elapsed = System.currentTimeMillis() - startTime;
-                    long minDuration = 3500; // 2 секунды
+                    long minDuration = 3500;
 
                     if (elapsed < minDuration) {
                         long remain = minDuration - elapsed;
@@ -209,9 +240,23 @@ public class MainWindow extends JFrame {
             loadingDialog.setVisible(true);
         });
 
+        JButton chooseFolderButton = StyledButton.createModernButton(conf.getTranslation("chooseFolderButton"), null);
+        buttonPanel.add(chooseFolderButton);
+        chooseFolderButton.addActionListener(e -> {
+            JFileChooser fc = new JFileChooser();
+            fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+                pluginsDir = fc.getSelectedFile().toPath();
+                logCurrentDirectory("Выбрана папка: " + pluginsDir);
+                refreshFilesList(inputList, pluginsDir.toString());
+                DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
+            }
+        });
+
+
         openInputFolderButton.addActionListener(e -> {
             logCurrentDirectory(conf.getTranslation("openInputFolder"));
-            FileUtils.openFolder("input", consoleArea, conf);
+            FileUtils.openFolder(pluginsDir.toString(), consoleArea, conf);
         });
 
         openOutputFolderButton.addActionListener(e -> {
@@ -223,7 +268,7 @@ public class MainWindow extends JFrame {
             logCurrentDirectory(conf.getTranslation("clearInputList"));
             if (confirmAction(conf.getTranslation("confirmClearInputList"))) {
                 clearFilesList(inputList);
-                FileUtils.clearFolder(new File("input").toPath(), consoleArea, conf);
+                FileUtils.clearFolder(new File(pluginsDir.toString()).toPath(), consoleArea, conf);
             }
         });
 
@@ -243,7 +288,7 @@ public class MainWindow extends JFrame {
 
         // ====== Завершаем ======
         logCurrentDirectory(conf.getTranslation("rel_file_start"));
-        refreshFilesList(inputList, "input");
+        refreshFilesList(inputList, pluginsDir.toString());
         refreshFilesList(outputList, "out");
         topPanel.revalidate();
         topPanel.repaint();
@@ -268,7 +313,7 @@ public class MainWindow extends JFrame {
 
     private void setAppIcon() {
         try {
-            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bm.png")));
+            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/logo_tr.png")));
             Image img = icon.getImage();
             setIconImage(img);
         } catch (Exception e) {

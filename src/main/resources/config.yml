@@ -101,6 +101,8 @@ ru:
   ignoringClass: "Игнорируем класс: %s"
   loadingTitle: "Идёт очистка..."
   loadingText: "Пожалуйста, подождите"
+  chooseFolderButton: "Выбрать папку"
+  bot_bm: "Проверить плагины на вирусы"
 en:
   removeHostflowButton: "Remove Hostflow"
   removeArtemkaButton: "Remove Artemka"
@@ -200,3 +202,5 @@ en:
   errorProcessingFile: "Error processing file: %s"
   removingInstructions: "Removing instructions related to: %s"
   ignoringClass: "Ignoring class: %s"
+  chooseFolderButton: "Choose Folder"
+  bot_bm: "Check plugins for viruses"

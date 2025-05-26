@@ -112,7 +112,7 @@ public class LanguageSelector {
 
     private void setAppIcon(JFrame frame) {
         try {
-            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bm.png")));
+            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/logo_tr.png")));
             Image img = icon.getImage();
             frame.setIconImage(img);
         } catch (Exception e) {
