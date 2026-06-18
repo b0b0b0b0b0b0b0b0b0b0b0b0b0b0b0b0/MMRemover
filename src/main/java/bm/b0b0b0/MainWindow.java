@@ -27,14 +27,14 @@ public class MainWindow extends JFrame {
     private JTextArea consoleArea;
     private final Conf conf;
 
-    private static final Color COLOR_MAIN_BG         = Color.decode("#3c3f41"); // общий фон
-    private static final Color COLOR_CONSOLE_BG      = Color.BLACK;             // фон самой консоли
-    private static final Color COLOR_CONSOLE_FG      = Color.WHITE;             // текст консоли
-    private static final Color COLOR_DELETE_BG       = new Color(255, 77, 77);  // кнопки "удалить"
-    private static final Color COLOR_PANEL_TITLE_BG  = Color.decode("#3c3f41"); // фон панелей
-    private static final Color COLOR_LINK_PANEL_BG   = Color.decode("#3c3f41"); // фон панелей-ссылок
-    private static final Color COLOR_BUTTON_BG       = Color.decode("#3c3f41"); // фон панелей с кнопками
-    private static final Color COLOR_VISIT_LINK_FG   = Color.decode("#09b55d"); // цвет текста кнопки-ссылки
+    private static final Color COLOR_MAIN_BG         = Color.decode("#3c3f41");
+    private static final Color COLOR_CONSOLE_BG      = Color.BLACK;
+    private static final Color COLOR_CONSOLE_FG      = Color.WHITE;
+    private static final Color COLOR_DELETE_BG       = new Color(255, 77, 77);
+    private static final Color COLOR_PANEL_TITLE_BG  = Color.decode("#3c3f41");
+    private static final Color COLOR_LINK_PANEL_BG   = Color.decode("#3c3f41");
+    private static final Color COLOR_BUTTON_BG       = Color.decode("#3c3f41");
+    private static final Color COLOR_VISIT_LINK_FG   = Color.decode("#09b55d");
 
 
     public MainWindow(Conf conf) {
@@ -45,7 +45,7 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.14)");
+        setTitle("MMRemover (v1.15)");
         setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -213,6 +213,7 @@ public class MainWindow extends JFrame {
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "pluginmetrics", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "aph", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "chbkHack", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "ruBstatsHack", consoleArea, conf);
                     return null;
                 }
 
@@ -286,7 +287,6 @@ public class MainWindow extends JFrame {
             }
         });
 
-        // ====== Завершаем ======
         logCurrentDirectory(conf.getTranslation("rel_file_start"));
         refreshFilesList(inputList, pluginsDir.toString());
         refreshFilesList(outputList, "out");
