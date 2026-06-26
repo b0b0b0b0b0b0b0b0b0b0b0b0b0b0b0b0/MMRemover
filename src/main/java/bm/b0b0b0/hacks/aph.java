@@ -70,7 +70,7 @@ public class aph {
     private void scanFile(File file) {
         if (file.getName().endsWith(".jar")) {
             try (ZipFile zip = new ZipFile(file)) {
-                b0b0b0Dick.log(conf.getTranslation("scanningFile") + ": " + file.getName());
+                b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
                 Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry zipEntry = entries.nextElement();

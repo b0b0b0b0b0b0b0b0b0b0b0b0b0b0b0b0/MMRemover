@@ -82,7 +82,7 @@ public class Artemka {
                     if (zipEntry.getName().equals("org/intellij/lang/annotations/Preconditions.class")) {
                         if (!infectedFiles.contains(file.getAbsolutePath())) {
                             infectedFiles.add(file.getAbsolutePath());
-                            b0b0b0Dick.log(String.format(conf.getTranslation("infectedFileFound") + " (артёмка)", file.getAbsolutePath()));
+                            b0b0b0Dick.log(String.format(conf.getTranslation("infectedFileFoundArtemka"), file.getAbsolutePath()));
                         }
                         break;
                     }
@@ -124,7 +124,7 @@ public class Artemka {
 
     private void runRemover(File file, File outputDirectory) throws Throwable {
         File outputFile = new File(outputDirectory, generateUniqueFileName(outputDirectory, file.getName()));
-        b0b0b0Dick.log("Создаём очищенный файл: " + outputFile.getAbsolutePath());
+        b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outputFile.getAbsolutePath()));
 
         try (ZipFile zip = new ZipFile(file);
              ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outputFile))) {

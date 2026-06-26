@@ -8,7 +8,7 @@ import bm.b0b0b0.util.files.FileListInteraction;
 import bm.b0b0b0.util.files.FileProcessor;
 import bm.b0b0b0.util.files.FileUtils;
 import bm.b0b0b0.util.gui.UIManagerUtil;
-import bm.b0b0b0.util.gui.LanguageSelector;
+import bm.b0b0b0.util.gui.LanguageSwitcher;
 import bm.b0b0b0.util.gui.load.LoadingDialog;
 
 import javax.swing.*;
@@ -45,8 +45,9 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.17)");
+        setTitle("MMRemover (v1.18)");
         setSize(800, 600);
+        setMinimumSize(new Dimension(600, 400));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
@@ -60,11 +61,11 @@ public class MainWindow extends JFrame {
         JPanel mainPanel = new JPanel(new BorderLayout());
         mainPanel.setBackground(COLOR_MAIN_BG);
         add(mainPanel);
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+        JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setBackground(COLOR_MAIN_BG);
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         buttonPanel.setBackground(COLOR_BUTTON_BG);
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 0));
         JButton removeAllButton = StyledButton.createModernButton(
                 conf.getTranslation("removeAllButton"),
                 UIManagerUtil.getEraserIcon(),
@@ -76,7 +77,14 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("refreshFilesButton")
         );
         buttonPanel.add(removeAllButton);
-        topPanel.add(buttonPanel);
+        topPanel.add(buttonPanel, BorderLayout.CENTER);
+
+        JPanel langPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        langPanel.setOpaque(false);
+        langPanel.setBackground(COLOR_BUTTON_BG);
+        langPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 8));
+        langPanel.add(LanguageSwitcher.create(conf, this::restartApplication));
+        topPanel.add(langPanel, BorderLayout.EAST);
         mainPanel.add(topPanel, BorderLayout.NORTH);
         JPanel inputPanel = new JPanel(new BorderLayout(0, 2));
         inputPanel.setBackground(COLOR_PANEL_TITLE_BG);
@@ -233,7 +241,7 @@ public class MainWindow extends JFrame {
             SwingWorker<Void, Void> worker = new SwingWorker<>() {
                 @Override
                 protected Void doInBackground() {
-                    logCurrentDirectory("Запуск очистки для всех типов вирусов...");
+                    logCurrentDirectory(conf.getTranslation("cleanupAllStart"));
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "hostflow", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "artemka", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "bstatsjar", consoleArea, conf);
@@ -280,7 +288,7 @@ public class MainWindow extends JFrame {
             fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 pluginsDir = fc.getSelectedFile().toPath();
-                logCurrentDirectory("Выбрана папка: " + pluginsDir);
+                logCurrentDirectory(String.format(conf.getTranslation("folderSelected"), pluginsDir));
                 inputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, pluginsDir.toString());
                 inputList.setCellRenderer(new FileListCellRenderer(pluginsDir.toString(), conf));
                 refreshFilesList(inputList, pluginsDir.toString());
@@ -399,14 +407,18 @@ public class MainWindow extends JFrame {
         );
         return option == JOptionPane.YES_OPTION;
     }
+
+    private void restartApplication() {
+        SwingUtilities.invokeLater(() -> {
+            dispose();
+            new MainWindow(conf).setVisible(true);
+        });
+    }
+
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            LanguageSelector.showLanguageSelector(() -> {
-                SwingUtilities.invokeLater(() -> {
-                    Conf conf = new Conf();
-                    new MainWindow(conf).setVisible(true);
-                });
-            });
+            Conf conf = new Conf();
+            new MainWindow(conf).setVisible(true);
         });
     }
 }

@@ -102,7 +102,7 @@ public class chbkHack {
         for (String path : infectedFiles) {
             try {
                 File src = new File(path);
-                b0b0b0Dick.log("Очищаем файл: " + src.getAbsolutePath());
+                b0b0b0Dick.log(conf.getTranslation("cleaningFile") + ": " + src.getAbsolutePath());
                 runRemover(src, outputPath.toFile());
             } catch (Throwable t) {
                 b0b0b0Dick.log("❌ " + t.getClass().getSimpleName()
@@ -117,7 +117,7 @@ public class chbkHack {
 
         try (ZipFile zip = new ZipFile(file)) {
 
-            b0b0b0Dick.log("Сканируем файл: " + file.getName());
+            b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
 
             final byte[] needle = "org/apache/commons/lang3/MutableUtilities".getBytes("UTF-8");
 
@@ -126,14 +126,14 @@ public class chbkHack {
                 ZipEntry entry = en.nextElement();
 
                 if ("org/apache/commons/lang3/MutableUtilities.class".equals(entry.getName())) {
-                    tagInfected(file, "лежит MutableUtilities.class");
+                    tagInfected(file, conf.getTranslation("infectionMutableClassPresent"));
                     return;
                 }
                 if (!entry.getName().endsWith(".class")) continue;
 
                 byte[] data = toByteArray(zip.getInputStream(entry));
                 if (indexOf(data, needle) != -1) {
-                    tagInfected(file, "строка MutableUtilities в " + entry.getName());
+                    tagInfected(file, String.format(conf.getTranslation("infectionMutableString"), entry.getName()));
                     return;
                 }
                 try {
@@ -141,30 +141,28 @@ public class chbkHack {
                     ClassNode cn = new ClassNode();
                     cr.accept(cn, 0);
                     if (containsMutableUtilities(cn)) {
-                        tagInfected(file, "вызовы MutableUtilities в " + entry.getName());
+                        tagInfected(file, String.format(conf.getTranslation("infectionMutableCalls"), entry.getName()));
                         return;
                     }
                 } catch (Throwable t) {
-                    b0b0b0Dick.log("   ⚠ ASM не понял "
-                            + entry.getName() + ": " + t.getMessage());
+                    b0b0b0Dick.log(String.format(conf.getTranslation("asmParseWarning"), entry.getName(), t.getMessage()));
                 }
             }
 
         } catch (Throwable t) {
-            b0b0b0Dick.log("Ошибка при сканировании " + file.getName() +
-                    ": " + t.getMessage());
+            b0b0b0Dick.log(String.format(conf.getTranslation("errorScanningFiles"), file.getName()) + ": " + t.getMessage());
         }
     }
 
     private void tagInfected(File file, String reason) {
         infectedFiles.add(file.getAbsolutePath());
-        b0b0b0Dick.log("☠ Заражение (" + reason + ") → " + file.getName());
+        b0b0b0Dick.log(String.format(conf.getTranslation("infectionDetected"), reason, file.getName()));
     }
 
     private void runRemover(File file, File outputDir) throws IOException {
 
         if (!outputDir.exists() && !outputDir.mkdirs())
-            throw new IOException("Не удалось создать " + outputDir);
+            throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
 
         List<ZipEntryData> all = new ArrayList<>();
 
@@ -184,7 +182,7 @@ public class chbkHack {
             if (!zd.isDirectory && zd.name.endsWith(".class")) {
 
                 if (shouldSkipClass(zd.name)) {
-                    b0b0b0Dick.log("Удалён класс: " + zd.name);
+                    b0b0b0Dick.log(String.format(conf.getTranslation("classRemoved"), zd.name));
                     continue;
                 }
 
@@ -192,7 +190,7 @@ public class chbkHack {
                 try {
                     cleaned = removeMutableUtilitiesCalls(zd.data);
                 } catch (Throwable ex) {
-                    b0b0b0Dick.log("   ⚠ skip " + zd.name + " (" + ex.getMessage() + ")");
+                    b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"), zd.name, ex.getMessage()));
                     cleaned = zd.data;
                 }
                 filtered.add(new ZipEntryData(zd.name, false, cleaned));
@@ -206,7 +204,7 @@ public class chbkHack {
 
         File outFile = new File(outputDir,
                 generateUniqueFileName(outputDir, file.getName()));
-        b0b0b0Dick.log("Создаём очищенный файл: " + outFile.getAbsolutePath());
+        b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
 
         try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outFile))) {
             for (ZipEntryData z : finalList) {

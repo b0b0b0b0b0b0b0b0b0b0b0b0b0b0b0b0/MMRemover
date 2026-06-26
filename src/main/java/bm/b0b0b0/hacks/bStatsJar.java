@@ -207,11 +207,6 @@ public class bStatsJar {
             }
             insn = insn.getNext();
         }
-        if (toRemove.isEmpty()) {
-            System.out.println("Не найдено инструкций для удаления в методе " + mn.name);
-        } else {
-            System.out.println("Найдено инструкций для удаления: " + toRemove.size());
-        }
         return toRemove;
     }
 

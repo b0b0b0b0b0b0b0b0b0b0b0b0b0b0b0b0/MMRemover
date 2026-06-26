@@ -109,15 +109,15 @@ public class ruBstatsHack {
                     byte[] data = in.readAllBytes();
 
                     if (indexOf(data, MALWARE_REPORT_URL) != -1) {
-                        tagInfected(file, "api-bstats.online/api/v2/data в " + name);
+                        tagInfected(file, String.format(conf.getTranslation("infectionBstatsApi"), name));
                         return;
                     }
                     if (indexOf(data, MALWARE_DOMAIN) != -1) {
-                        tagInfected(file, "api-bstats.online в " + name);
+                        tagInfected(file, String.format(conf.getTranslation("infectionBstatsDomain"), name));
                         return;
                     }
                     if (referencesRuBstats(data)) {
-                        tagInfected(file, "вызов ru/bstats в " + name);
+                        tagInfected(file, String.format(conf.getTranslation("infectionRuBstatsCall"), name));
                         return;
                     }
                 } catch (Throwable ignored) {
@@ -133,7 +133,7 @@ public class ruBstatsHack {
             return;
         }
         infectedFiles.add(file.getAbsolutePath());
-        b0b0b0Dick.log("☠ ru/bstats (" + reason + ") → " + file.getName());
+        b0b0b0Dick.log(String.format(conf.getTranslation("ruBstatsInfected"), reason, file.getName()));
     }
 
     private boolean referencesRuBstats(byte[] clazz) {
@@ -172,7 +172,7 @@ public class ruBstatsHack {
 
     private void runRemover(File file, File outputDir) throws IOException {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
-            throw new IOException("Не удалось создать " + outputDir);
+            throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
         List<ZipEntryData> all = new ArrayList<>();

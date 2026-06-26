@@ -77,7 +77,7 @@ public class HostFlow {
     private void scanFile(File file) {
         if (file.getName().endsWith(".jar")) {
             try (ZipFile zip = new ZipFile(file)) {
-                b0b0b0Dick.log("Сканируем файл: " + file.getName());
+                b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
                 Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry zipEntry = entries.nextElement();
@@ -110,7 +110,7 @@ public class HostFlow {
                 b0b0b0Dick.log(String.format(conf.getTranslation("processingFile"), entryName));
 
                 if (entryName.equals(".l_ignore") || entryName.equals(".l1")) {
-                    b0b0b0Dick.log("Удаляем файл: " + entryName);
+                    b0b0b0Dick.log(String.format(conf.getTranslation("removingFile"), entryName));
                     continue;
                 }
 
