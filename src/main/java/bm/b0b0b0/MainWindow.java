@@ -4,6 +4,7 @@ import bm.b0b0b0.util.gui.Conf;
 import bm.b0b0b0.util.gui.DragAndDropHandler;
 import bm.b0b0b0.util.gui.StyledButton;
 import bm.b0b0b0.util.files.FileListCellRenderer;
+import bm.b0b0b0.util.files.FileListInteraction;
 import bm.b0b0b0.util.files.FileProcessor;
 import bm.b0b0b0.util.files.FileUtils;
 import bm.b0b0b0.util.gui.UIManagerUtil;
@@ -30,7 +31,6 @@ public class MainWindow extends JFrame {
     private static final Color COLOR_MAIN_BG         = Color.decode("#3c3f41");
     private static final Color COLOR_CONSOLE_BG      = Color.BLACK;
     private static final Color COLOR_CONSOLE_FG      = Color.WHITE;
-    private static final Color COLOR_DELETE_BG       = new Color(255, 77, 77);
     private static final Color COLOR_PANEL_TITLE_BG  = Color.decode("#3c3f41");
     private static final Color COLOR_LINK_PANEL_BG   = Color.decode("#3c3f41");
     private static final Color COLOR_BUTTON_BG       = Color.decode("#3c3f41");
@@ -45,7 +45,7 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.15)");
+        setTitle("MMRemover (v1.16)");
         setSize(800, 600);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -65,99 +65,131 @@ public class MainWindow extends JFrame {
         topPanel.setBackground(COLOR_MAIN_BG);
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
         buttonPanel.setBackground(COLOR_BUTTON_BG);
-        JButton removeAllButton = StyledButton.createModernButton(conf.getTranslation("removeAllButton"), null);
+        JButton removeAllButton = StyledButton.createModernButton(
+                conf.getTranslation("removeAllButton"),
+                UIManagerUtil.getEraserIcon(),
+                StyledButton.Style.PRIMARY);
+        removeAllButton.setToolTipText(conf.getTranslation("removeAllButtonTooltip"));
+        JButton refreshFilesButton = StyledButton.createModernIconButton(
+                UIManagerUtil.getRefreshIcon(),
+                StyledButton.Style.SECONDARY,
+                conf.getTranslation("refreshFilesButton")
+        );
         buttonPanel.add(removeAllButton);
         topPanel.add(buttonPanel);
         mainPanel.add(topPanel, BorderLayout.NORTH);
-        JPanel inputPanel = new JPanel(new BorderLayout());
+        JPanel inputPanel = new JPanel(new BorderLayout(0, 2));
         inputPanel.setBackground(COLOR_PANEL_TITLE_BG);
         inputList = new JList<>();
-        inputList.setCellRenderer(new FileListCellRenderer(new File(pluginsDir.toString()).getAbsolutePath(), conf));
+        inputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, pluginsDir.toString());
+        inputList.setCellRenderer(new FileListCellRenderer(pluginsDir.toString(), conf));
+        UIManagerUtil.enableListItemHover(inputList);
         JScrollPane inputScrollPane = new JScrollPane(inputList);
+        JButton openInputFolderButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getFolderIcon(),
+                conf.getTranslation("openInputFolderButton")
+        );
+        JButton clearInputListButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getTrashIcon(),
+                conf.getTranslation("clearInputListButton")
+        );
+        JPanel inputHeader = UIManagerUtil.createPanelHeader(
+                conf.getTranslation("inputPanelTitle"), openInputFolderButton, clearInputListButton);
+        inputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
+        inputPanel.add(inputHeader, BorderLayout.NORTH);
         inputPanel.add(inputScrollPane, BorderLayout.CENTER);
-        UIManagerUtil.styleTitledBorder(inputPanel, conf.getTranslation("inputPanelTitle"));
+        UIManagerUtil.styleContentPanel(inputPanel);
         inputPanel.setPreferredSize(new Dimension(350, 250));
-        JPanel outputPanel = new JPanel(new BorderLayout());
+        JPanel outputPanel = new JPanel(new BorderLayout(0, 2));
         outputPanel.setBackground(COLOR_PANEL_TITLE_BG);
         outputList = new JList<>();
-        outputList.setCellRenderer(new FileListCellRenderer(new File("out").getAbsolutePath(), conf));
+        outputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, "out");
+        outputList.setCellRenderer(new FileListCellRenderer("out", conf));
+        UIManagerUtil.enableListItemHover(outputList);
         JScrollPane outputScrollPane = new JScrollPane(outputList);
+        JButton openOutputFolderButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getFolderIcon(),
+                conf.getTranslation("openOutputFolderButton")
+        );
+        JButton clearOutputListButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getTrashIcon(),
+                conf.getTranslation("clearOutputListButton")
+        );
+        JPanel outputHeader = UIManagerUtil.createPanelHeader(
+                conf.getTranslation("outputPanelTitle"), openOutputFolderButton, clearOutputListButton);
+        outputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
+        outputPanel.add(outputHeader, BorderLayout.NORTH);
         outputPanel.add(outputScrollPane, BorderLayout.CENTER);
-        UIManagerUtil.styleTitledBorder(outputPanel, conf.getTranslation("outputPanelTitle"));
+        UIManagerUtil.styleContentPanel(outputPanel);
         outputPanel.setPreferredSize(new Dimension(350, 250));
         JSplitPane fileSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, outputPanel);
-        fileSplitPane.setDividerLocation(350);
+        fileSplitPane.setResizeWeight(0.5);
         fileSplitPane.setBackground(COLOR_MAIN_BG);
         consoleArea = new JTextArea(5, 20);
         consoleArea.setBackground(COLOR_CONSOLE_BG);
         consoleArea.setForeground(COLOR_CONSOLE_FG);
+        FileListInteraction.enableFileDelete(inputList, consoleArea, conf,
+                () -> refreshFilesList(inputList, pluginsDir.toString()));
+        FileListInteraction.enableFileDelete(outputList, consoleArea, conf,
+                () -> refreshFilesList(outputList, "out"));
         JScrollPane consoleScrollPane = new JScrollPane(consoleArea);
-        UIManagerUtil.styleTitledBorder(consoleScrollPane, conf.getTranslation("consolePanelTitle"));
-        consoleScrollPane.setMinimumSize(new Dimension(0, 150));
-        consoleScrollPane.setPreferredSize(new Dimension(800, 200));
-        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, fileSplitPane, consoleScrollPane);
-        mainSplitPane.setDividerLocation(350);
+        JPanel consolePanel = new JPanel(new BorderLayout(0, 2));
+        consolePanel.setBackground(COLOR_MAIN_BG);
+        JButton clearConsoleButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getTrashIcon(),
+                conf.getTranslation("clearConsoleButton")
+        );
+        JPanel consoleHeader = UIManagerUtil.createPanelHeader(
+                conf.getTranslation("consolePanelTitle"), clearConsoleButton);
+        consoleHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
+        consolePanel.add(consoleHeader, BorderLayout.NORTH);
+        consolePanel.add(consoleScrollPane, BorderLayout.CENTER);
+        UIManagerUtil.styleContentPanel(consolePanel);
+        consoleScrollPane.setMinimumSize(new Dimension(0, 0));
+        consolePanel.setMinimumSize(new Dimension(0, 120));
+        consolePanel.setPreferredSize(new Dimension(0, 180));
+        JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, fileSplitPane, consolePanel);
+        mainSplitPane.setResizeWeight(0.0);
         mainPanel.add(mainSplitPane, BorderLayout.CENTER);
         JPanel bottomPanel = new JPanel(new BorderLayout());
         bottomPanel.setBackground(COLOR_MAIN_BG);
-        JPanel secondaryButtonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        secondaryButtonPanel.setBackground(COLOR_BUTTON_BG);
-        JButton refreshFilesButton = UIManagerUtil.createStyledButton(conf.getTranslation("refreshFilesButton"), UIManager.getIcon("FileView.refreshIcon"));
-        JButton openInputFolderButton = UIManagerUtil.createStyledButton(conf.getTranslation("openInputFolderButton"), UIManager.getIcon("FileView.directoryIcon"));
-        JButton openOutputFolderButton = UIManagerUtil.createStyledButton(conf.getTranslation("openOutputFolderButton"), UIManager.getIcon("FileView.directoryIcon"));
-        JButton clearInputListButton = UIManagerUtil.createStyledButton(conf.getTranslation("clearInputListButton"), UIManager.getIcon("FileView.floppyDriveIcon"));
-        JButton clearOutputListButton = UIManagerUtil.createStyledButton(conf.getTranslation("clearOutputListButton"), UIManager.getIcon("FileView.floppyDriveIcon"));
-        JButton clearConsoleButton = UIManagerUtil.createStyledButton(conf.getTranslation("clearConsoleButton"), UIManager.getIcon("FileView.computerIcon"));
-        clearInputListButton.setBackground(COLOR_DELETE_BG);
-        clearInputListButton.setForeground(Color.WHITE);
-
-        clearOutputListButton.setBackground(COLOR_DELETE_BG);
-        clearOutputListButton.setForeground(Color.WHITE);
-
-        clearConsoleButton.setBackground(COLOR_DELETE_BG);
-        clearConsoleButton.setForeground(Color.WHITE);
-
-        secondaryButtonPanel.add(refreshFilesButton);
-        secondaryButtonPanel.add(openInputFolderButton);
-        secondaryButtonPanel.add(openOutputFolderButton);
-        secondaryButtonPanel.add(clearInputListButton);
-        secondaryButtonPanel.add(clearOutputListButton);
-        secondaryButtonPanel.add(clearConsoleButton);
 
         JPanel linkPanel = new JPanel(new BorderLayout());
         linkPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         linkPanel.setBackground(COLOR_LINK_PANEL_BG);
 
-        JButton visitWebsiteButton = new JButton("<HTML><U>" + conf.getTranslation("pageTitle") + "</U></HTML>");
-        visitWebsiteButton.setForeground(COLOR_VISIT_LINK_FG);
+        JButton visitWebsiteButton = new JButton();
+        visitWebsiteButton.setToolTipText(conf.getTranslation("pageTitle"));
         visitWebsiteButton.setBorderPainted(false);
         visitWebsiteButton.setOpaque(false);
         visitWebsiteButton.setBackground(null);
         visitWebsiteButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        visitWebsiteButton.setFocusPainted(false);
 
         try {
             ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bm.png")));
             Image img = icon.getImage();
             Image scaledImg = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-            ImageIcon scaledIcon = new ImageIcon(scaledImg);
-            visitWebsiteButton.setIcon(scaledIcon);
+            visitWebsiteButton.setIcon(new ImageIcon(scaledImg));
         } catch (Exception e) {
             System.err.println(conf.getTranslation("Icon_not_found") + ": " + e.getMessage());
         }
 
-        JButton botCheckButton = new JButton("<HTML><U>" + conf.getTranslation("bot_bm") + "</U></HTML>");
+        JButton botCheckButton = new JButton(conf.getTranslation("bot_bm"));
+        botCheckButton.setToolTipText(conf.getTranslation("bot_bmTooltip"));
         botCheckButton.setForeground(COLOR_VISIT_LINK_FG);
         botCheckButton.setBorderPainted(false);
         botCheckButton.setOpaque(false);
         botCheckButton.setBackground(null);
         botCheckButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        botCheckButton.setFocusPainted(false);
 
         try {
             ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bot.png")));
             Image img = icon.getImage();
             Image scaledImg = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-            ImageIcon scaledIcon = new ImageIcon(scaledImg);
-            botCheckButton.setIcon(scaledIcon);
+            botCheckButton.setIcon(new ImageIcon(scaledImg));
+            botCheckButton.setIconTextGap(6);
         } catch (Exception e) {
             System.err.println("Icon not found: " + e.getMessage());
         }
@@ -169,9 +201,6 @@ public class MainWindow extends JFrame {
                 throw new RuntimeException(ex);
             }
         });
-
-        visitWebsiteButton.setVerticalTextPosition(SwingConstants.CENTER);
-        visitWebsiteButton.setVerticalAlignment(SwingConstants.CENTER);
 
         visitWebsiteButton.addActionListener(e -> {
             try {
@@ -187,8 +216,7 @@ public class MainWindow extends JFrame {
         linksBox.add(visitWebsiteButton);
 
         linkPanel.add(linksBox, BorderLayout.EAST);
-        bottomPanel.add(secondaryButtonPanel, BorderLayout.CENTER);
-        bottomPanel.add(linkPanel, BorderLayout.SOUTH);
+        bottomPanel.add(linkPanel, BorderLayout.CENTER);
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
         DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
         DragAndDropHandler.addDragAndDropSupport(outputList);
@@ -201,7 +229,6 @@ public class MainWindow extends JFrame {
         removeAllButton.addActionListener(e -> {
             long startTime = System.currentTimeMillis();
             LoadingDialog loadingDialog = new LoadingDialog(this, conf);
-            loadingDialog.setModal(false);
 
             SwingWorker<Void, Void> worker = new SwingWorker<>() {
                 @Override
@@ -241,14 +268,21 @@ public class MainWindow extends JFrame {
             loadingDialog.setVisible(true);
         });
 
-        JButton chooseFolderButton = StyledButton.createModernButton(conf.getTranslation("chooseFolderButton"), null);
+        JButton chooseFolderButton = StyledButton.createModernButton(
+                conf.getTranslation("chooseFolderButton"),
+                UIManagerUtil.getFolderIcon(),
+                StyledButton.Style.SECONDARY);
+        chooseFolderButton.setToolTipText(conf.getTranslation("chooseFolderButtonTooltip"));
         buttonPanel.add(chooseFolderButton);
+        buttonPanel.add(refreshFilesButton);
         chooseFolderButton.addActionListener(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
             if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 pluginsDir = fc.getSelectedFile().toPath();
                 logCurrentDirectory("Выбрана папка: " + pluginsDir);
+                inputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, pluginsDir.toString());
+                inputList.setCellRenderer(new FileListCellRenderer(pluginsDir.toString(), conf));
                 refreshFilesList(inputList, pluginsDir.toString());
                 DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
             }
@@ -295,6 +329,10 @@ public class MainWindow extends JFrame {
         mainPanel.revalidate();
         mainPanel.repaint();
         pack();
+        SwingUtilities.invokeLater(() -> {
+            mainSplitPane.setDividerLocation(0.68);
+            fileSplitPane.setDividerLocation(0.5);
+        });
 
         setVisible(true);
     }
@@ -345,8 +383,20 @@ public class MainWindow extends JFrame {
         consoleArea.setText("");
     }
     private boolean confirmAction(String message) {
-        int option = JOptionPane.showConfirmDialog(this, message, conf.getTranslation("confirmActionTitle"),
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        Object[] options = {
+                conf.getTranslation("confirmYes"),
+                conf.getTranslation("confirmNo")
+        };
+        int option = JOptionPane.showOptionDialog(
+                this,
+                message,
+                conf.getTranslation("confirmActionTitle"),
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                options,
+                options[0]
+        );
         return option == JOptionPane.YES_OPTION;
     }
     public static void main(String[] args) {

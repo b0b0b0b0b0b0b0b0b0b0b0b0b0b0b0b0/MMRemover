@@ -1,71 +1,95 @@
 package bm.b0b0b0.util.gui;
 
 import javax.swing.*;
-import javax.swing.border.Border;
 import java.awt.*;
 
 public class StyledButton {
 
-    public static JButton createModernButton(String text, String iconPath) {
-        JButton button = new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        button.setPreferredSize(new Dimension(180, 40));
-        button.setForeground(Color.WHITE);
-        button.setBackground(new Color(60, 120, 220));
-        button.setBorder(new RoundedBorder(15));
-        button.setContentAreaFilled(false);
+    public enum Style {
+        PRIMARY,
+        SECONDARY
+    }
+
+    public static JButton createModernButton(String text, Icon icon) {
+        return createModernButton(text, icon, Style.PRIMARY);
+    }
+
+    public static JButton createModernButton(String text, Icon icon, Style style) {
+        JButton button = icon != null ? new JButton(text, icon) : new JButton(text);
+        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         button.setFocusPainted(false);
-        button.setOpaque(true);
+        button.setFocusable(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(icon != null ? 210 : 172, 36));
+        button.putClientProperty("JButton.buttonType", "roundRect");
+        button.putClientProperty("JComponent.focusWidth", 0);
+        button.putClientProperty("JComponent.outline", null);
+        button.putClientProperty("JComponent.minimumWidth", 168);
 
-        if (iconPath != null)
-            button.setIcon(new ImageIcon(iconPath));
+        if (icon != null) {
+            button.setIconTextGap(8);
+            button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        }
 
-        button.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override
-            public void mouseEntered(java.awt.event.MouseEvent e) {
-                button.setBackground(new Color(80, 140, 240));
-            }
+        String commonStyle = "arc: 6; focusWidth: 0;";
 
-            @Override
-            public void mouseExited(java.awt.event.MouseEvent e) {
-                button.setBackground(new Color(60, 120, 220));
-            }
-
-            @Override
-            public void mousePressed(java.awt.event.MouseEvent e) {
-                button.setBackground(new Color(40, 100, 200));
-                button.setFont(new Font("Segoe UI", Font.BOLD, 13));
-            }
-
-            @Override
-            public void mouseReleased(java.awt.event.MouseEvent e) {
-                button.setBackground(new Color(80, 140, 240));
-                button.setFont(new Font("Segoe UI", Font.BOLD, 14));
-            }
-        });
+        if (style == Style.PRIMARY) {
+            button.putClientProperty("FlatLaf.style", commonStyle
+                    + "background: #09b55d;"
+                    + "foreground: #FFFFFF;"
+                    + "hoverBackground: #0bc266;"
+                    + "pressedBackground: #08a052;"
+                    + "focusedBackground: #09b55d;"
+                    + "disabledBackground: #3c3f41;"
+                    + "disabledText: #8a8a8a;");
+        } else {
+            button.putClientProperty("FlatLaf.style", commonStyle
+                    + "background: #4a4d50;"
+                    + "foreground: #ebebeb;"
+                    + "hoverBackground: #565a5e;"
+                    + "pressedBackground: #3e4144;"
+                    + "focusedBackground: #4a4d50;"
+                    + "disabledBackground: #3c3f41;"
+                    + "disabledText: #8a8a8a;");
+        }
 
         return button;
     }
 
+    public static JButton createModernIconButton(Icon icon, Style style, String tooltip) {
+        JButton button = new JButton(icon);
+        button.setToolTipText(tooltip);
+        button.setFocusPainted(false);
+        button.setFocusable(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(36, 36));
+        button.putClientProperty("JButton.buttonType", "roundRect");
+        button.putClientProperty("JComponent.focusWidth", 0);
+        button.putClientProperty("JComponent.outline", null);
+        button.putClientProperty("JComponent.minimumWidth", 36);
 
-    public static class RoundedBorder implements Border {
-        private final int radius;
+        String commonStyle = "arc: 6; focusWidth: 0;";
 
-        public RoundedBorder(int radius) {
-            this.radius = radius;
+        if (style == Style.PRIMARY) {
+            button.putClientProperty("FlatLaf.style", commonStyle
+                    + "background: #09b55d;"
+                    + "foreground: #FFFFFF;"
+                    + "hoverBackground: #0bc266;"
+                    + "pressedBackground: #08a052;"
+                    + "focusedBackground: #09b55d;"
+                    + "disabledBackground: #3c3f41;"
+                    + "disabledText: #8a8a8a;");
+        } else {
+            button.putClientProperty("FlatLaf.style", commonStyle
+                    + "background: #4a4d50;"
+                    + "foreground: #ebebeb;"
+                    + "hoverBackground: #565a5e;"
+                    + "pressedBackground: #3e4144;"
+                    + "focusedBackground: #4a4d50;"
+                    + "disabledBackground: #3c3f41;"
+                    + "disabledText: #8a8a8a;");
         }
 
-        public Insets getBorderInsets(Component c) {
-            return new Insets(radius + 1, radius + 1, radius + 2, radius);
-        }
-
-        public boolean isBorderOpaque() {
-            return true;
-        }
-
-        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
-            g.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
-        }
+        return button;
     }
 }

@@ -35,11 +35,19 @@ public class FileUtils {
         if (files != null) {
             for (File file : files) {
                 if (file.isFile()) {
-                    file.delete();
-                    appendToConsole(consoleArea, String.format(conf.getTranslation("fileDeleted"), file.getName()));
+                    deleteFile(file, consoleArea, conf);
                 }
             }
         }
+    }
+
+    public static boolean deleteFile(File file, JTextArea consoleArea, Conf conf) {
+        if (file.exists() && file.isFile() && file.delete()) {
+            appendToConsole(consoleArea, String.format(conf.getTranslation("fileDeleted"), file.getName()));
+            return true;
+        }
+        appendToConsole(consoleArea, String.format(conf.getTranslation("errorDeletingFile"), file.getName()));
+        return false;
     }
 
 
