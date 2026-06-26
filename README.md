@@ -27,20 +27,29 @@ Java **17+**
 ## Запуск
 
 ```bat
-javaw -jar MMRemover-1.16.jar
+javaw -jar MMRemover-1.17.jar
 ```
 
 Или батник рядом с jar:
 
 ```bat
 @echo off
-set JAR_NAME=MMRemover-1.16
+cd /d "%~dp0"
 
-for %%f in (%JAR_NAME%.jar) do (
-    echo Start %%f...
-    javaw -jar "%%f"
-    echo.
+set "JAR="
+for /f "delims=" %%f in ('dir /b /o-d "MMRemover*.jar" 2^>nul') do (
+    set "JAR=%%f"
+    goto :run
 )
+
+echo MMRemover jar not found.
+pause
+exit /b 1
+
+:run
+echo Start %JAR%...
+javaw -jar "%JAR%"
+echo.
 pause
 ```
 
