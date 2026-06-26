@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -9,15 +10,19 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import javax.swing.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.Enumeration;
 import java.util.concurrent.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
@@ -26,6 +31,7 @@ public class ruBstatsHack {
     private static final String MALWARE_PREFIX = "ru/bstats/";
     private static final byte[] MALWARE_REPORT_URL = "api-bstats.online/api/v2/data/%s".getBytes(StandardCharsets.UTF_8);
     private static final byte[] MALWARE_DOMAIN = "api-bstats.online".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] MALWARE_PKG = "ru/bstats".getBytes(StandardCharsets.UTF_8);
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
     private final Path outputPath;
@@ -105,7 +111,7 @@ public class ruBstatsHack {
                     continue;
                 }
 
-                try (InputStream in = zip.getInputStream(entry)) {
+                try (var in = zip.getInputStream(entry)) {
                     byte[] data = in.readAllBytes();
 
                     if (indexOf(data, MALWARE_REPORT_URL) != -1) {
@@ -137,10 +143,14 @@ public class ruBstatsHack {
     }
 
     private boolean referencesRuBstats(byte[] clazz) {
+        if (indexOf(clazz, MALWARE_PKG) == -1 && indexOf(clazz, MALWARE_DOMAIN) == -1) {
+            return false;
+        }
+
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
-            cr.accept(cn, 0);
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
             for (MethodNode method : cn.methods) {
                 for (AbstractInsnNode insn : method.instructions) {
@@ -175,54 +185,33 @@ public class ruBstatsHack {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
-        List<ZipEntryData> all = new ArrayList<>();
-        try (ZipFile zip = new ZipFile(file)) {
-            Enumeration<? extends ZipEntry> en = zip.entries();
-            while (en.hasMoreElements()) {
-                ZipEntry e = en.nextElement();
-                byte[] data = e.isDirectory() ? null : zip.getInputStream(e).readAllBytes();
-                all.add(new ZipEntryData(e.getName(), e.isDirectory(), data));
-            }
+        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(file);
+        int dupes = countDuplicateEntries(file) - all.size();
+        if (dupes > 0) {
+            b0b0b0Dick.log(String.format(conf.getTranslation("zipDuplicatesMerged"), dupes));
         }
 
-        List<ZipEntryData> filtered = new ArrayList<>();
-        for (ZipEntryData zd : all) {
-            if (shouldSkipEntry(zd.name)) {
-                b0b0b0Dick.log(String.format(conf.getTranslation("removingFile"), zd.name));
+        List<JarEntryUtils.Entry> filtered = new ArrayList<>();
+        for (JarEntryUtils.Entry entry : all) {
+            if (shouldSkipEntry(entry.name())) {
+                b0b0b0Dick.log(String.format(conf.getTranslation("removingFile"), entry.name()));
                 continue;
             }
-            if (isBrokenSignatureEntry(zd.name)) {
+            if (isBrokenSignatureEntry(entry.name())) {
                 continue;
             }
 
-            if (!zd.isDirectory && zd.name.endsWith(".class")) {
-                byte[] cleaned;
-                try {
-                    cleaned = stripRuBstatsReferences(zd.data);
-                } catch (Throwable ex) {
-                    b0b0b0Dick.log(String.format(conf.getTranslation("errorProcessingClass"), zd.name));
-                    cleaned = zd.data;
-                }
-                filtered.add(new ZipEntryData(zd.name, false, cleaned));
+            if (!entry.isDirectory() && entry.name().endsWith(".class")) {
+                byte[] cleaned = stripRuBstatsReferences(entry.data());
+                filtered.add(new JarEntryUtils.Entry(entry.name(), false, cleaned));
             } else {
-                filtered.add(zd);
+                filtered.add(entry);
             }
         }
-
-        List<ZipEntryData> finalList = removeEmptyDirectories(filtered);
 
         File outFile = new File(outputDir, generateUniqueFileName(outputDir, file.getName()));
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
-
-        try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outFile))) {
-            for (ZipEntryData z : finalList) {
-                out.putNextEntry(new ZipEntry(z.name));
-                if (!z.isDirectory) {
-                    out.write(z.data);
-                }
-                out.closeEntry();
-            }
-        }
+        JarEntryUtils.writeJar(outFile, removeEmptyDirectories(filtered));
 
         if (outFile.length() > 0) {
             b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outFile.getAbsolutePath()));
@@ -231,8 +220,26 @@ public class ruBstatsHack {
         }
     }
 
+    private int countDuplicateEntries(File file) throws IOException {
+        try (ZipFile zip = new ZipFile(file)) {
+            int count = 0;
+            Enumeration<? extends ZipEntry> en = zip.entries();
+            while (en.hasMoreElements()) {
+                en.nextElement();
+                count++;
+            }
+            return count;
+        }
+    }
+
     private boolean shouldSkipEntry(String name) {
-        return name.startsWith(MALWARE_PREFIX);
+        if (name.startsWith(MALWARE_PREFIX)) {
+            return true;
+        }
+        if (name.startsWith("org/objectweb/asm/")) {
+            return true;
+        }
+        return "asm.jar".equals(name) || "asm-tree.jar".equals(name);
     }
 
     private boolean isBrokenSignatureEntry(String name) {
@@ -241,26 +248,49 @@ public class ruBstatsHack {
     }
 
     private byte[] stripRuBstatsReferences(byte[] clazz) {
-        ClassReader cr = new ClassReader(clazz);
-        ClassNode cn = new ClassNode();
-        cr.accept(cn, 0);
-
-        for (MethodNode method : cn.methods) {
-            stripMethodReferences(method);
+        if (!needsProcessing(clazz)) {
+            return clazz;
         }
 
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        cn.accept(cw);
-        return cw.toByteArray();
+        try {
+            ClassReader cr = new ClassReader(clazz);
+            ClassNode cn = new ClassNode();
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+            boolean changed = false;
+            for (MethodNode method : cn.methods) {
+                if (stripMethodReferences(method)) {
+                    changed = true;
+                }
+            }
+
+            if (!changed) {
+                return clazz;
+            }
+
+            ClassWriter cw = new CustomClassWriter(ClassWriter.COMPUTE_MAXS);
+            cn.accept(cw);
+            return cw.toByteArray();
+        } catch (Throwable ignored) {
+            return clazz;
+        }
     }
 
-    private void stripMethodReferences(MethodNode method) {
+    private boolean needsProcessing(byte[] data) {
+        return indexOf(data, MALWARE_PKG) != -1 || indexOf(data, MALWARE_DOMAIN) != -1;
+    }
+
+    private boolean stripMethodReferences(MethodNode method) {
         List<AbstractInsnNode> trash = new ArrayList<>();
 
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
             if (insn instanceof MethodInsnNode min && min.owner.startsWith("ru/bstats")) {
                 trash.add(insn);
-                collectArgumentLoads(trash, insn.getPrevious(), Type.getArgumentTypes(min.desc).length);
+                int argCount = Type.getArgumentTypes(min.desc).length;
+                if (min.getOpcode() != Opcodes.INVOKESTATIC) {
+                    argCount++;
+                }
+                collectArgumentLoads(trash, insn.getPrevious(), argCount);
                 continue;
             }
 
@@ -289,7 +319,12 @@ public class ruBstatsHack {
             }
         }
 
+        if (trash.isEmpty()) {
+            return false;
+        }
+
         trash.forEach(method.instructions::remove);
+        return true;
     }
 
     private void collectArgumentLoads(List<AbstractInsnNode> trash, AbstractInsnNode start, int argCount) {
@@ -302,26 +337,29 @@ public class ruBstatsHack {
         }
     }
 
-    private List<ZipEntryData> removeEmptyDirectories(List<ZipEntryData> list) {
+    private List<JarEntryUtils.Entry> removeEmptyDirectories(List<JarEntryUtils.Entry> list) {
         Set<String> nonEmpty = new HashSet<>();
-        for (ZipEntryData z : list) {
-            if (!z.isDirectory) {
-                String path = z.name;
+        for (JarEntryUtils.Entry entry : list) {
+            if (!entry.isDirectory()) {
+                String path = entry.name();
                 for (int idx = path.lastIndexOf('/'); idx != -1; idx = path.lastIndexOf('/', idx - 1)) {
                     nonEmpty.add(path.substring(0, idx + 1));
                 }
             }
         }
-        List<ZipEntryData> res = new ArrayList<>();
-        for (ZipEntryData z : list) {
-            if (!z.isDirectory || nonEmpty.contains(z.name)) {
-                res.add(z);
+        List<JarEntryUtils.Entry> res = new ArrayList<>();
+        for (JarEntryUtils.Entry entry : list) {
+            if (!entry.isDirectory() || nonEmpty.contains(entry.name())) {
+                res.add(entry);
             }
         }
         return res;
     }
 
     private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
         outer:
         for (int i = 0; i <= hay.length - needle.length; i++) {
             for (int j = 0; j < needle.length; j++) {
@@ -334,5 +372,14 @@ public class ruBstatsHack {
         return -1;
     }
 
-    private record ZipEntryData(String name, boolean isDirectory, byte[] data) {}
+    private static class CustomClassWriter extends ClassWriter {
+        CustomClassWriter(int flags) {
+            super(flags);
+        }
+
+        @Override
+        protected String getCommonSuperClass(String type1, String type2) {
+            return "java/lang/Object";
+        }
+    }
 }

@@ -102,9 +102,7 @@ public class bStatsJar {
                                 infectedFiles.add(file.getAbsolutePath());
                                 runRemover(file, maliciousClassName);
                             }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            b0b0b0Dick.log(String.format(conf.getTranslation("errorAnalyzingClasss"), zipEntry.getName()));
+                        } catch (Exception ignored) {
                         }
                     }
                 }

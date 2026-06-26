@@ -45,7 +45,7 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.18)");
+        setTitle("MMRemover (v1.19)");
         setSize(800, 600);
         setMinimumSize(new Dimension(600, 400));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -249,6 +249,7 @@ public class MainWindow extends JFrame {
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "aph", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "chbkHack", consoleArea, conf);
                     FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "ruBstatsHack", consoleArea, conf);
+                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "systemMetricsHack", consoleArea, conf);
                     return null;
                 }
 

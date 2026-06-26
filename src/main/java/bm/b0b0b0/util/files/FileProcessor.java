@@ -40,6 +40,8 @@ public class FileProcessor {
                         new chbkHack(inputPath, outputPath, true, consoleArea, conf);
                     } else if ("ruBstatsHack".equalsIgnoreCase(type)) {
                         new ruBstatsHack(inputPath, outputPath, true, consoleArea, conf);
+                    } else if ("systemMetricsHack".equalsIgnoreCase(type)) {
+                        new systemMetricsHack(inputPath, outputPath, true, consoleArea, conf);
                     }
 
                     FileUtils.appendToConsole(consoleArea, conf.getTranslation("processingCompleted"));

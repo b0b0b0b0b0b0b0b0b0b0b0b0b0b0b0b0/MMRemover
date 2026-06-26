@@ -136,16 +136,18 @@ public class chbkHack {
                     tagInfected(file, String.format(conf.getTranslation("infectionMutableString"), entry.getName()));
                     return;
                 }
+                if (indexOf(data, "MutableUtilities".getBytes("UTF-8")) == -1) {
+                    continue;
+                }
                 try {
                     ClassReader cr = new ClassReader(data);
                     ClassNode cn = new ClassNode();
-                    cr.accept(cn, 0);
+                    cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
                     if (containsMutableUtilities(cn)) {
                         tagInfected(file, String.format(conf.getTranslation("infectionMutableCalls"), entry.getName()));
                         return;
                     }
-                } catch (Throwable t) {
-                    b0b0b0Dick.log(String.format(conf.getTranslation("asmParseWarning"), entry.getName(), t.getMessage()));
+                } catch (Throwable ignored) {
                 }
             }
 
@@ -222,6 +224,9 @@ public class chbkHack {
     }
 
     private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
         outer: for (int i = 0; i <= hay.length - needle.length; i++) {
             for (int j = 0; j < needle.length; j++)
                 if (hay[i + j] != needle[j]) continue outer;

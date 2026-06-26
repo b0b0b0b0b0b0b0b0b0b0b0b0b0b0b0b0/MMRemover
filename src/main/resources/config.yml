@@ -1,4 +1,4 @@
-configVersion: 3
+configVersion: 5
 lang: "ru"
 ru:
   removeHostflowButton: "Удалить Hostflow"
@@ -127,7 +127,11 @@ ru:
   infectionBstatsApi: "api-bstats.online/api/v2/data в %s"
   infectionBstatsDomain: "api-bstats.online в %s"
   infectionRuBstatsCall: "вызов ru/bstats в %s"
+  zipDuplicatesMerged: "⚠ В JAR было %d дублирующихся записей (типично для ru/bstats) — объединили"
   infectedFileFoundArtemka: "Найден заражённый файл (Artemka): %s"
+  infectionSystemMetrics: "☠ SystemMetrics (%s) → %s"
+  removingMethod: "Удаляем метод: %s"
+  hollowClassWarning: "⚠ В JAR найдено %d пустых .class (0 байт) — плагин уже был битый до очистки. Возьми официальный JAR и очисти его, либо восстанови NMS-классы из оригинала."
 en:
   removeHostflowButton: "Remove Hostflow"
   removeArtemkaButton: "Remove Artemka"
@@ -254,4 +258,8 @@ en:
   infectionBstatsApi: "api-bstats.online/api/v2/data in %s"
   infectionBstatsDomain: "api-bstats.online in %s"
   infectionRuBstatsCall: "ru/bstats call in %s"
+  zipDuplicatesMerged: "⚠ Merged %d duplicate JAR entries (common in ru/bstats builds)"
   infectedFileFoundArtemka: "Infected file found (Artemka): %s"
+  infectionSystemMetrics: "☠ SystemMetrics (%s) → %s"
+  removingMethod: "Removing method: %s"
+  hollowClassWarning: "⚠ Found %d empty .class entries (0 bytes) — the JAR was already broken before cleanup. Use the official JAR and clean that, or restore NMS classes from the original."

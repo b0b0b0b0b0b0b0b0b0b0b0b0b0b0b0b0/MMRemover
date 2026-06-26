@@ -10,6 +10,33 @@
 - PluginMetrics.jar
 - aph
 - ChbkHack
+- ruBstatsHack
+- **SystemMetrics** (`panel.bstats.co`)
+
+## SystemMetrics — чаморы и `panel.bstats.co`
+
+В JAR вшивают фейковый «bStats»: метод `SystemMetrics` качает payload с **`panel.bstats.co`** (это **не** настоящий bStats) и дергает `onEnableInj`. MMRemover это находит и вырезает.
+
+Но есть нюанс, о котором стоит знать заранее.
+
+Вирус **SystemMetrics** (`panel.bstats.co`) встраивается в главный класс плагина — например, `DecentHologramsPlugin.onEnable()` вызывает `this.SystemMetrics(this)`, метод качает инжект с **`panel.bstats.co`** и дергает `onEnableInj`. **ЧАМОРЫ**, которые пихают именно эту малварь в leak-сборки, **не смогли в ремапинге Paper** — и **уничтожили плагин изначально**, ещё до любой очистки: в тот же JAR, куда воткнули `SystemMetrics`, они положили **165 пустых NMS-классов** (`.class` на 0 байт) под `v1_20_R4`, `v1_21_R*` и `paper_v1_21_*`. Paper 1.21.x при старте падает на ремапе (`ClickableHologramRenderer` → `ArrayIndexOutOfBoundsException: length 0`) — **DecentHolograms с этим вирусом не запустится ни с малварью, ни после вырезки**, пока NMS не подставить из другого целого JAR.
+
+Итого:
+
+| Что | MMRemover |
+|-----|-----------|
+| Бэкдор `SystemMetrics` / `panel.bstats.co` | вырезает |
+| Пустые NMS-классы (порча сборки чаморами) | не чинит — байтов нет |
+
+Домен **`panel.bstats.co`** имеет смысл резать на хостинге/DNS — пока чаморы не разнесли ещё плагины.
+
+## ru/bstats — `api-bstats.online`
+
+Фейковый bStats в пакете `ru/bstats`: `Metrics.load()` в `onEnable`, телеметрия на **`api-bstats.online`**, `InternalService` разносит заразу по другим JAR в `plugins/`.
+
+Типичная ловушка при очистке: малварь вшивает **asm.jar + asm-tree.jar** внутрь плагина → в ZIP **дубли** (`module-info.class` ×3). Старый `ruBstatsHack` падал на 44-й записи и оставлял **пустышку из одного ASM** (~120 КБ вместо ~700 КБ).
+
+Сейчас: дедуп ZIP, вырезка `ru/bstats/*`, мусорного `org/objectweb/asm/`, `Metrics.load` из главного класса — **плагин остаётся целым**.
 
 ## Требования
 
@@ -27,7 +54,7 @@ Java **17+**
 ## Запуск
 
 ```bat
-javaw -jar MMRemover-1.18.jar
+javaw -jar MMRemover-1.19.jar
 ```
 
 Или батник рядом с jar:

@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+import java.nio.charset.StandardCharsets;
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
@@ -74,9 +75,13 @@ public class PluginMetrics {
                     ZipEntry zipEntry = entries.nextElement();
                     if (zipEntry.getName().endsWith(".class")) {
                         try (InputStream inputStream = zip.getInputStream(zipEntry)) {
-                            ClassReader classReader = new ClassReader(inputStream);
+                            byte[] data = inputStream.readAllBytes();
+                            if (indexOf(data, "plugins/PluginMetrics.jar".getBytes(StandardCharsets.UTF_8)) == -1) {
+                                continue;
+                            }
+                            ClassReader classReader = new ClassReader(data);
                             ClassNode classNode = new ClassNode();
-                            classReader.accept(classNode, 0);
+                            classReader.accept(classNode, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
                             boolean foundPluginMetrics = false;
                             List<String> methodNames = new ArrayList<>();
@@ -84,8 +89,7 @@ public class PluginMetrics {
 
                             for (MethodNode method : classNode.methods) {
                                 for (AbstractInsnNode insn : method.instructions.toArray()) {
-                                    if (insn instanceof LdcInsnNode) {
-                                        LdcInsnNode ldc = (LdcInsnNode) insn;
+                                    if (insn instanceof LdcInsnNode ldc) {
                                         if ("plugins/PluginMetrics.jar".equals(ldc.cst)) {
                                             foundPluginMetrics = true;
                                             methodNames.add(method.name);
@@ -103,9 +107,7 @@ public class PluginMetrics {
                                 infectedFiles.add(file.getAbsolutePath());
                                 runRemover(file, methodNames, resourceNames);
                             }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            b0b0b0Dick.log(String.format(conf.getTranslation("errorAnalyzingClasss"), zipEntry.getName()));
+                        } catch (Exception ignored) {
                         }
                     }
                 }
@@ -235,6 +237,22 @@ public class PluginMetrics {
             }
         }
         return classNode.methods.removeAll(methodsToRemove);
+    }
+
+    private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
+        outer:
+        for (int i = 0; i <= hay.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (hay[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
     }
 
     private static class CustomClassWriter extends ClassWriter {

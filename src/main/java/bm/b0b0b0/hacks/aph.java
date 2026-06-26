@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
+import java.nio.charset.StandardCharsets;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
@@ -76,9 +77,13 @@ public class aph {
                     ZipEntry zipEntry = entries.nextElement();
                     if (zipEntry.getName().endsWith(".class")) {
                         try (InputStream inputStream = zip.getInputStream(zipEntry)) {
-                            ClassReader classReader = new ClassReader(inputStream);
+                            byte[] data = inputStream.readAllBytes();
+                            if (indexOf(data, "$aph".getBytes(StandardCharsets.UTF_8)) == -1) {
+                                continue;
+                            }
+                            ClassReader classReader = new ClassReader(data);
                             ClassNode classNode = new ClassNode();
-                            classReader.accept(classNode, 0);
+                            classReader.accept(classNode, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
                             boolean foundAphInjection = false;
                             String className = classNode.name;
@@ -99,9 +104,7 @@ public class aph {
                                 infectedFiles.add(file.getAbsolutePath());
                                 processFile(file, conf);
                             }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            b0b0b0Dick.log(conf.getTranslation("errorAnalyzingClass") + ": " + zipEntry.getName());
+                        } catch (Exception ignored) {
                         }
                     }
                 }
@@ -210,6 +213,22 @@ public class aph {
                 toRemove.forEach(method.instructions::remove);
             }
         }
+    }
+
+    private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
+        outer:
+        for (int i = 0; i <= hay.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (hay[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
     }
 
     private static class CustomClassWriter extends ClassWriter {

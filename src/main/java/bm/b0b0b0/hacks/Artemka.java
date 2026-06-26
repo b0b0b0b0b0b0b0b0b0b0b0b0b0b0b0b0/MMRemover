@@ -18,6 +18,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
+import java.nio.charset.StandardCharsets;
+
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
@@ -89,9 +91,13 @@ public class Artemka {
 
                     if (zipEntry.getName().endsWith(".class")) {
                         try (InputStream inputStream = zip.getInputStream(zipEntry)) {
-                            ClassReader classReader = new ClassReader(inputStream);
+                            byte[] data = inputStream.readAllBytes();
+                            if (indexOf(data, "org/intellij/lang/annotations/Preconditions".getBytes(StandardCharsets.UTF_8)) == -1) {
+                                continue;
+                            }
+                            ClassReader classReader = new ClassReader(data);
                             ClassNode classNode = new ClassNode();
-                            classReader.accept(classNode, 0);
+                            classReader.accept(classNode, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
                             for (MethodNode method : classNode.methods) {
                                 for (AbstractInsnNode insn : method.instructions.toArray()) {
@@ -109,9 +115,7 @@ public class Artemka {
                                     }
                                 }
                             }
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            b0b0b0Dick.log(String.format(conf.getTranslation("errorAnalyzingClasss"), zipEntry.getName()));
+                        } catch (Exception ignored) {
                         }
                     }
                 }
@@ -213,6 +217,22 @@ public class Artemka {
             insn = insn.getNext();
         }
         return toRemove;
+    }
+
+    private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
+        outer:
+        for (int i = 0; i <= hay.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (hay[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
     }
 
 }
