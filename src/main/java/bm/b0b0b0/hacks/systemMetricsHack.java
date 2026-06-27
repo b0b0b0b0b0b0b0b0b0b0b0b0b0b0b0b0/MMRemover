@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -9,24 +10,34 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
 
 import javax.swing.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
 public class systemMetricsHack {
 
+    private static final String[] YAML_DESCRIPTORS = {
+            "plugin.yml",
+            "paper-plugin.yml",
+            "bungee.yml"
+    };
+    private static final String VELOCITY_DESCRIPTOR = "velocity-plugin.json";
+    private static final Pattern JSON_MAIN = Pattern.compile("\"main\"\\s*:\\s*\"([^\"\\\\]+)\"");
     private static final String METRICS_METHOD_NAME = "SystemMetrics";
     private static final String METRICS_METHOD_DESC = "(Lorg/bukkit/plugin/java/JavaPlugin;)V";
     private static final byte[] PANEL_BSTATS_URL = "panel.bstats.co".getBytes(StandardCharsets.UTF_8);
     private static final byte[] ON_ENABLE_INJ = "onEnableInj".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] RELOCATE_CHECKS = "bstats.relocatechecks".getBytes(StandardCharsets.UTF_8);
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
     private final Path outputPath;
@@ -81,23 +92,15 @@ public class systemMetricsHack {
             return;
         }
 
-        try (ZipFile zip = new ZipFile(file)) {
+        try {
             b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
 
-            Enumeration<? extends ZipEntry> entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                if (!entry.getName().endsWith(".class")) {
-                    continue;
-                }
-
-                try (InputStream in = zip.getInputStream(entry)) {
-                    byte[] data = in.readAllBytes();
-                    if (isInfectedClass(data)) {
-                        tagInfected(file, entry.getName());
-                        return;
-                    }
-                } catch (Throwable ignored) {
+            for (String mainClass : readMainClasses(file)) {
+                String mainEntry = toClassEntry(mainClass);
+                byte[] mainBytecode = readClassEntry(file, mainEntry);
+                if (mainBytecode != null && isInfectedMainClass(mainBytecode)) {
+                    tagInfected(file, mainEntry);
+                    return;
                 }
             }
         } catch (Throwable t) {
@@ -105,8 +108,77 @@ public class systemMetricsHack {
         }
     }
 
-    private boolean isInfectedClass(byte[] data) {
-        if (indexOf(data, PANEL_BSTATS_URL) != -1 || indexOf(data, ON_ENABLE_INJ) != -1) {
+    private List<String> readMainClasses(File jar) throws IOException {
+        Set<String> mains = new LinkedHashSet<>();
+        try (ZipFile zip = new ZipFile(jar)) {
+            for (String descriptor : YAML_DESCRIPTORS) {
+                ZipEntry entry = zip.getEntry(descriptor);
+                if (entry == null) {
+                    continue;
+                }
+                String yml = new String(zip.getInputStream(entry).readAllBytes(), StandardCharsets.UTF_8);
+                String main = parseYamlMain(yml);
+                if (main != null) {
+                    mains.add(main);
+                }
+            }
+
+            ZipEntry velocity = zip.getEntry(VELOCITY_DESCRIPTOR);
+            if (velocity != null) {
+                String json = new String(zip.getInputStream(velocity).readAllBytes(), StandardCharsets.UTF_8);
+                String main = parseJsonMain(json);
+                if (main != null) {
+                    mains.add(main);
+                }
+            }
+        }
+        return new ArrayList<>(mains);
+    }
+
+    private String parseYamlMain(String yml) {
+        for (String line : yml.split("\n")) {
+            String trimmed = line.trim();
+            if (!trimmed.startsWith("main:")) {
+                continue;
+            }
+            String value = trimmed.substring("main:".length()).trim();
+            if (!value.isEmpty()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String parseJsonMain(String json) {
+        Matcher matcher = JSON_MAIN.matcher(json);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return null;
+    }
+
+    private static String toClassEntry(String mainClass) {
+        return mainClass.replace('.', '/') + ".class";
+    }
+
+    private byte[] readClassEntry(File jar, String entryName) throws IOException {
+        try (ZipFile zip = new ZipFile(jar)) {
+            ZipEntry entry = zip.getEntry(entryName);
+            if (entry == null || entry.isDirectory()) {
+                return null;
+            }
+            return zip.getInputStream(entry).readAllBytes();
+        }
+    }
+
+    private boolean isInfectedMainClass(byte[] data) {
+        if (data.length == 0) {
+            return false;
+        }
+
+        if (indexOf(data, PANEL_BSTATS_URL) != -1
+                || indexOf(data, ON_ENABLE_INJ) != -1
+                || indexOf(data, RELOCATE_CHECKS) != -1) {
             return true;
         }
 
@@ -124,12 +196,12 @@ public class systemMetricsHack {
         return METRICS_METHOD_NAME.equals(method.name) && METRICS_METHOD_DESC.equals(method.desc);
     }
 
-    private void tagInfected(File file, String className) {
+    private void tagInfected(File file, String classEntry) {
         if (infectedFiles.contains(file.getAbsolutePath())) {
             return;
         }
         infectedFiles.add(file.getAbsolutePath());
-        b0b0b0Dick.log(String.format(conf.getTranslation("infectionSystemMetrics"), className, file.getName()));
+        b0b0b0Dick.log(String.format(conf.getTranslation("infectionSystemMetrics"), classEntry, file.getName()));
     }
 
     private void runRemover(File file, File outputDir) throws IOException {
@@ -137,49 +209,46 @@ public class systemMetricsHack {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
-        List<ZipEntryData> all = new ArrayList<>();
-        int hollowClassCount = 0;
-        try (ZipFile zip = new ZipFile(file)) {
-            Enumeration<? extends ZipEntry> en = zip.entries();
-            while (en.hasMoreElements()) {
-                ZipEntry e = en.nextElement();
-                byte[] data = e.isDirectory() ? null : zip.getInputStream(e).readAllBytes();
-                if (!e.isDirectory() && e.getName().endsWith(".class") && data.length == 0) {
-                    hollowClassCount++;
-                }
-                all.add(new ZipEntryData(e.getName(), e.isDirectory(), data));
+        Set<String> entriesToClean = new HashSet<>();
+        for (String mainClass : readMainClasses(file)) {
+            String mainEntry = toClassEntry(mainClass);
+            byte[] bytecode = readClassEntry(file, mainEntry);
+            if (bytecode != null && isInfectedMainClass(bytecode)) {
+                entriesToClean.add(mainEntry);
             }
         }
+        if (entriesToClean.isEmpty()) {
+            return;
+        }
 
+        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(file);
+        int hollowClassCount = 0;
+        for (JarEntryUtils.Entry entry : all) {
+            if (!entry.isDirectory() && entry.name().endsWith(".class")
+                    && (entry.data() == null || entry.data().length == 0)) {
+                hollowClassCount++;
+            }
+        }
         if (hollowClassCount > 0) {
             b0b0b0Dick.log(String.format(conf.getTranslation("hollowClassWarning"), hollowClassCount));
         }
 
-        List<ZipEntryData> cleaned = new ArrayList<>();
-        for (ZipEntryData zd : all) {
-            if (isBrokenSignatureEntry(zd.name)) {
+        List<JarEntryUtils.Entry> cleaned = new ArrayList<>();
+        for (JarEntryUtils.Entry entry : all) {
+            if (isBrokenSignatureEntry(entry.name())) {
                 continue;
             }
-            if (!zd.isDirectory && zd.name.endsWith(".class")) {
-                byte[] stripped = stripSystemMetrics(zd.data);
-                cleaned.add(new ZipEntryData(zd.name, false, stripped));
+            if (!entry.isDirectory() && entriesToClean.contains(entry.name()) && entry.data() != null) {
+                byte[] stripped = stripSystemMetrics(entry.data());
+                cleaned.add(new JarEntryUtils.Entry(entry.name(), false, stripped));
             } else {
-                cleaned.add(zd);
+                cleaned.add(entry);
             }
         }
 
         File outFile = new File(outputDir, generateUniqueFileName(outputDir, file.getName()));
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
-
-        try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outFile))) {
-            for (ZipEntryData z : cleaned) {
-                out.putNextEntry(new ZipEntry(z.name));
-                if (!z.isDirectory) {
-                    out.write(z.data);
-                }
-                out.closeEntry();
-            }
-        }
+        JarEntryUtils.writeJar(outFile, cleaned);
 
         if (outFile.length() > 0) {
             b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outFile.getAbsolutePath()));
@@ -189,10 +258,6 @@ public class systemMetricsHack {
     }
 
     private byte[] stripSystemMetrics(byte[] clazz) {
-        if (!needsProcessing(clazz)) {
-            return clazz;
-        }
-
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
@@ -225,12 +290,6 @@ public class systemMetricsHack {
         } catch (Throwable ignored) {
             return clazz;
         }
-    }
-
-    private boolean needsProcessing(byte[] data) {
-        return indexOf(data, PANEL_BSTATS_URL) != -1
-                || indexOf(data, ON_ENABLE_INJ) != -1
-                || indexOf(data, METRICS_METHOD_NAME.getBytes(StandardCharsets.UTF_8)) != -1;
     }
 
     private boolean stripMetricsInvocations(MethodNode method) {
@@ -289,9 +348,6 @@ public class systemMetricsHack {
             return i;
         }
         return -1;
-    }
-
-    private record ZipEntryData(String name, boolean isDirectory, byte[] data) {
     }
 
     private static class CustomClassWriter extends ClassWriter {

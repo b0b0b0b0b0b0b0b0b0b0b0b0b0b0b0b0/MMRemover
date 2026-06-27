@@ -22,6 +22,7 @@ public class UIManagerUtil {
     private static final Color ICON_DISABLED_COLOR = new Color(0x888888);
     private static final Color CLEAR_ICON_ENABLED_COLOR = new Color(0xE57373);
     private static final Color PRIMARY_ICON_ENABLED_COLOR = new Color(0x0A2E1C);
+    public static final String PANEL_TITLE_LABEL_KEY = "mmremover.panelTitleLabel";
     public static final String LIST_HOVERED_INDEX_KEY = "mmremover.listHoveredIndex";
     public static final String LIST_DIRECTORY_PATH_KEY = "mmremover.listDirectoryPath";
     public static final int LIST_DELETE_ZONE_WIDTH = 36;
@@ -348,6 +349,7 @@ public class UIManagerUtil {
         JLabel label = new JLabel(title);
         label.setFont(new Font("Arial", Font.BOLD, 15));
         label.setForeground(PANEL_BORDER_COLOR);
+        header.putClientProperty(PANEL_TITLE_LABEL_KEY, label);
         header.add(label, BorderLayout.WEST);
 
         if (actionButtons.length > 0) {

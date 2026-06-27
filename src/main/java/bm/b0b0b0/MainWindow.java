@@ -24,6 +24,8 @@ import java.util.Objects;
 public class MainWindow extends JFrame {
     private JList<String> inputList;
     private JList<String> outputList;
+    private JLabel inputPanelTitleLabel;
+    private JLabel outputPanelTitleLabel;
     private Path pluginsDir = Paths.get("input");
     private JTextArea consoleArea;
     private final Conf conf;
@@ -45,7 +47,7 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.19)");
+        setTitle("MMRemover (v1.20)");
         setSize(800, 600);
         setMinimumSize(new Dimension(600, 400));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -103,6 +105,7 @@ public class MainWindow extends JFrame {
         );
         JPanel inputHeader = UIManagerUtil.createPanelHeader(
                 conf.getTranslation("inputPanelTitle"), openInputFolderButton, clearInputListButton);
+        inputPanelTitleLabel = (JLabel) inputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
         inputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         inputPanel.add(inputHeader, BorderLayout.NORTH);
         inputPanel.add(inputScrollPane, BorderLayout.CENTER);
@@ -125,6 +128,7 @@ public class MainWindow extends JFrame {
         );
         JPanel outputHeader = UIManagerUtil.createPanelHeader(
                 conf.getTranslation("outputPanelTitle"), openOutputFolderButton, clearOutputListButton);
+        outputPanelTitleLabel = (JLabel) outputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
         outputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         outputPanel.add(outputHeader, BorderLayout.NORTH);
         outputPanel.add(outputScrollPane, BorderLayout.CENTER);
@@ -375,18 +379,42 @@ public class MainWindow extends JFrame {
     private void refreshFilesList(JList<String> list, String folderName) {
         File folder = new File(folderName);
         System.out.println(conf.getTranslation("checkingFolderExists") + ": " + folder.getAbsolutePath());
+        int count = 0;
         if (folder.exists() && folder.isDirectory()) {
             String[] files = folder.list((dir, name) -> name.endsWith(".jar"));
             if (files != null) {
+                count = files.length;
                 list.setListData(files);
+            } else {
+                list.setListData(new String[0]);
             }
         } else {
             System.out.println(conf.getTranslation("folderNotFound"));
+            list.setListData(new String[0]);
+        }
+        updatePanelTitle(list, count);
+    }
+
+    private void updatePanelTitle(JList<String> list, int count) {
+        JLabel titleLabel;
+        String titleKey;
+        if (list == inputList) {
+            titleLabel = inputPanelTitleLabel;
+            titleKey = "inputPanelTitle";
+        } else if (list == outputList) {
+            titleLabel = outputPanelTitleLabel;
+            titleKey = "outputPanelTitle";
+        } else {
+            return;
+        }
+        if (titleLabel != null) {
+            titleLabel.setText(String.format("%s (%d)", conf.getTranslation(titleKey), count));
         }
     }
 
     private void clearFilesList(JList<String> list) {
         list.setListData(new String[0]);
+        updatePanelTitle(list, 0);
     }
     private void clearConsole() {
         consoleArea.setText("");
