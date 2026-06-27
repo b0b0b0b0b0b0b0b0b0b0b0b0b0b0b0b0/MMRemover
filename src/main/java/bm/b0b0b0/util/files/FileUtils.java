@@ -7,11 +7,19 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 
 public class FileUtils {
 
+    private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+    public static String formatLogLine(String message) {
+        return "[" + LocalTime.now().format(LOG_TIME) + "] " + message;
+    }
+
     public static void appendToConsole(JTextArea consoleArea, String message) {
-        consoleArea.append(message + "\n");
+        consoleArea.append(formatLogLine(message) + "\n");
         consoleArea.setCaretPosition(consoleArea.getDocument().getLength());
     }
 

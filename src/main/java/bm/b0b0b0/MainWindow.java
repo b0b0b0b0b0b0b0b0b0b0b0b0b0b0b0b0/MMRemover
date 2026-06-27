@@ -13,6 +13,7 @@ import bm.b0b0b0.util.gui.load.LoadingDialog;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -147,12 +148,16 @@ public class MainWindow extends JFrame {
         JScrollPane consoleScrollPane = new JScrollPane(consoleArea);
         JPanel consolePanel = new JPanel(new BorderLayout(0, 2));
         consolePanel.setBackground(COLOR_MAIN_BG);
+        JButton copyConsoleButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getCopyIcon(),
+                conf.getTranslation("copyConsoleButton")
+        );
         JButton clearConsoleButton = UIManagerUtil.createIconButton(
                 UIManagerUtil.getTrashIcon(),
                 conf.getTranslation("clearConsoleButton")
         );
         JPanel consoleHeader = UIManagerUtil.createPanelHeader(
-                conf.getTranslation("consolePanelTitle"), clearConsoleButton);
+                conf.getTranslation("consolePanelTitle"), copyConsoleButton, clearConsoleButton);
         consoleHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         consolePanel.add(consoleHeader, BorderLayout.NORTH);
         consolePanel.add(consoleScrollPane, BorderLayout.CENTER);
@@ -328,6 +333,8 @@ public class MainWindow extends JFrame {
             }
         });
 
+        copyConsoleButton.addActionListener(e -> copyConsole());
+
         clearConsoleButton.addActionListener(e -> {
             if (confirmAction(conf.getTranslation("confirmClearConsole"))) {
                 clearConsole();
@@ -416,6 +423,15 @@ public class MainWindow extends JFrame {
         list.setListData(new String[0]);
         updatePanelTitle(list, 0);
     }
+    private void copyConsole() {
+        String text = consoleArea.getText();
+        if (text == null || text.isEmpty()) {
+            return;
+        }
+        Toolkit.getDefaultToolkit().getSystemClipboard()
+                .setContents(new StringSelection(text), null);
+    }
+
     private void clearConsole() {
         consoleArea.setText("");
     }

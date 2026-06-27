@@ -289,6 +289,51 @@ public class UIManagerUtil {
         return getTrashIcon(16);
     }
 
+    public static Icon getCopyIcon() {
+        return getCopyIcon(16);
+    }
+
+    public static Icon getCopyIcon(int size) {
+        return createDrawnCopyIcon(size);
+    }
+
+    private static Icon createDrawnCopyIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
+                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
+
+                float s = size / 16f;
+                int backX = x + Math.round(5 * s);
+                int backY = y + Math.round(3 * s);
+                int backW = Math.round(8 * s);
+                int backH = Math.round(9 * s);
+                int frontX = x + Math.round(3 * s);
+                int frontY = y + Math.round(5 * s);
+                int frontW = backW;
+                int frontH = backH;
+                int r = Math.max(1, Math.round(1.5f * s));
+
+                g2.drawRoundRect(backX, backY, backW, backH, r, r);
+                g2.drawRoundRect(frontX, frontY, frontW, frontH, r, r);
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
     public static Icon getTrashIcon(int size) {
         Icon resourceIcon = createTintedResourceIcon(
                 BROOM_ICON_PATH, size, CLEAR_ICON_ENABLED_COLOR, ICON_DISABLED_COLOR);

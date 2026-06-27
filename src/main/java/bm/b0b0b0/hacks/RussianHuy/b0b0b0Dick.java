@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks.RussianHuy;
 
 import bm.b0b0b0.util.gui.Conf;
+import bm.b0b0b0.util.files.FileUtils;
 
 import javax.swing.JTextArea;
 import java.io.InputStream;
@@ -13,11 +14,12 @@ public final class b0b0b0Dick {
         consoleArea = area;
     }
     public static void log(String message) {
-        System.out.println(message);
+        String line = FileUtils.formatLogLine(message);
+        System.out.println(line);
         JTextArea area = consoleArea;
         if (area != null) {
             javax.swing.SwingUtilities.invokeLater(() -> {
-                area.append(message + '\n');
+                area.append(line + '\n');
                 area.setCaretPosition(area.getDocument().getLength());
             });
         }

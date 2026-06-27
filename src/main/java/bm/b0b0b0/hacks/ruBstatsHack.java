@@ -255,7 +255,7 @@ public class ruBstatsHack {
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
-            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.EXPAND_FRAMES);
 
             boolean changed = false;
             for (MethodNode method : cn.methods) {
@@ -268,7 +268,7 @@ public class ruBstatsHack {
                 return clazz;
             }
 
-            ClassWriter cw = new CustomClassWriter(ClassWriter.COMPUTE_MAXS);
+            ClassWriter cw = new ClassWriter(cr, 0);
             cn.accept(cw);
             return cw.toByteArray();
         } catch (Throwable ignored) {
@@ -370,16 +370,5 @@ public class ruBstatsHack {
             return i;
         }
         return -1;
-    }
-
-    private static class CustomClassWriter extends ClassWriter {
-        CustomClassWriter(int flags) {
-            super(flags);
-        }
-
-        @Override
-        protected String getCommonSuperClass(String type1, String type2) {
-            return "java/lang/Object";
-        }
     }
 }
