@@ -120,7 +120,7 @@ Java **17+**
 ## Запуск
 
 ```bat
-javaw -jar MMRemover-1.22.jar
+javaw -jar MMRemover-1.23.jar
 ```
 
 Или батник рядом с jar:
