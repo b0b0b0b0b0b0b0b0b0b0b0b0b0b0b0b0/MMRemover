@@ -28,10 +28,14 @@ import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
 public class ruBstatsHack {
 
-    private static final String MALWARE_PREFIX = "ru/bstats/";
-    private static final byte[] MALWARE_REPORT_URL = "api-bstats.online/api/v2/data/%s".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] MALWARE_DOMAIN = "api-bstats.online".getBytes(StandardCharsets.UTF_8);
-    private static final byte[] MALWARE_PKG = "ru/bstats".getBytes(StandardCharsets.UTF_8);
+    private static final String RU_PREFIX = "ru/bstats/";
+    private static final String ME_PREFIX = "me/bstats/";
+    private static final byte[] RU_REPORT_URL = "api-bstats.online/api/v2/data/%s".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] RU_DOMAIN = "api-bstats.online".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] RU_PKG = "ru/bstats".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ME_DOMAIN = "bstats.xyz".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ME_PKG = "me/bstats".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] ME_PAYLOAD_JAR = "adod_bstats.jar".getBytes(StandardCharsets.UTF_8);
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
     private final Path outputPath;
@@ -94,15 +98,11 @@ public class ruBstatsHack {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName();
 
-                if ("ru/bstats/InternalService.class".equals(name)) {
-                    tagInfected(file, "InternalService.class");
+                if (isKnownMalwareClass(name)) {
+                    tagInfected(file, name);
                     return;
                 }
-                if ("ru/bstats/Metrics.class".equals(name)) {
-                    tagInfected(file, "Metrics.class");
-                    return;
-                }
-                if (name.startsWith(MALWARE_PREFIX) && name.endsWith(".class")) {
+                if (isMalwarePackageEntry(name)) {
                     tagInfected(file, name);
                     return;
                 }
@@ -114,16 +114,24 @@ public class ruBstatsHack {
                 try (var in = zip.getInputStream(entry)) {
                     byte[] data = in.readAllBytes();
 
-                    if (indexOf(data, MALWARE_REPORT_URL) != -1) {
+                    if (indexOf(data, RU_REPORT_URL) != -1) {
                         tagInfected(file, String.format(conf.getTranslation("infectionBstatsApi"), name));
                         return;
                     }
-                    if (indexOf(data, MALWARE_DOMAIN) != -1) {
+                    if (indexOf(data, RU_DOMAIN) != -1) {
                         tagInfected(file, String.format(conf.getTranslation("infectionBstatsDomain"), name));
                         return;
                     }
-                    if (referencesRuBstats(data)) {
-                        tagInfected(file, String.format(conf.getTranslation("infectionRuBstatsCall"), name));
+                    if (indexOf(data, ME_DOMAIN) != -1) {
+                        tagInfected(file, String.format(conf.getTranslation("infectionBstatsXyz"), name));
+                        return;
+                    }
+                    if (indexOf(data, ME_PAYLOAD_JAR) != -1) {
+                        tagInfected(file, String.format(conf.getTranslation("infectionBstatsPayload"), name));
+                        return;
+                    }
+                    if (referencesMalwareBstats(data)) {
+                        tagInfected(file, String.format(conf.getTranslation("infectionBstatsCall"), name));
                         return;
                     }
                 } catch (Throwable ignored) {
@@ -134,6 +142,22 @@ public class ruBstatsHack {
         }
     }
 
+    private static boolean isKnownMalwareClass(String name) {
+        return "ru/bstats/InternalService.class".equals(name)
+                || "ru/bstats/Metrics.class".equals(name)
+                || "me/bstats/services/InternalService.class".equals(name)
+                || "me/bstats/config/MetricsConfig.class".equals(name);
+    }
+
+    private static boolean isMalwarePackageEntry(String name) {
+        return name.endsWith(".class")
+                && (name.startsWith(RU_PREFIX) || name.startsWith(ME_PREFIX));
+    }
+
+    private static boolean isMalwarePackage(String internalName) {
+        return internalName.startsWith(RU_PREFIX) || internalName.startsWith(ME_PREFIX);
+    }
+
     private void tagInfected(File file, String reason) {
         if (infectedFiles.contains(file.getAbsolutePath())) {
             return;
@@ -142,8 +166,11 @@ public class ruBstatsHack {
         b0b0b0Dick.log(String.format(conf.getTranslation("ruBstatsInfected"), reason, file.getName()));
     }
 
-    private boolean referencesRuBstats(byte[] clazz) {
-        if (indexOf(clazz, MALWARE_PKG) == -1 && indexOf(clazz, MALWARE_DOMAIN) == -1) {
+    private boolean referencesMalwareBstats(byte[] clazz) {
+        if (indexOf(clazz, RU_PKG) == -1
+                && indexOf(clazz, RU_DOMAIN) == -1
+                && indexOf(clazz, ME_PKG) == -1
+                && indexOf(clazz, ME_DOMAIN) == -1) {
             return false;
         }
 
@@ -154,22 +181,23 @@ public class ruBstatsHack {
 
             for (MethodNode method : cn.methods) {
                 for (AbstractInsnNode insn : method.instructions) {
-                    if (insn instanceof MethodInsnNode min && min.owner.startsWith("ru/bstats")) {
+                    if (insn instanceof MethodInsnNode min && isMalwarePackage(min.owner)) {
                         return true;
                     }
                     if (insn instanceof TypeInsnNode tin
                             && (tin.getOpcode() == Opcodes.NEW || tin.getOpcode() == Opcodes.CHECKCAST)
-                            && tin.desc.startsWith("ru/bstats")) {
+                            && isMalwarePackage(tin.desc)) {
                         return true;
                     }
-                    if (insn instanceof FieldInsnNode fin && fin.owner.startsWith("ru/bstats")) {
+                    if (insn instanceof FieldInsnNode fin && isMalwarePackage(fin.owner)) {
                         return true;
                     }
                     if (insn instanceof LdcInsnNode ldc) {
-                        if (ldc.cst instanceof String s && s.contains("api-bstats.online")) {
+                        if (ldc.cst instanceof String s
+                                && (s.contains("api-bstats.online") || s.contains("bstats.xyz"))) {
                             return true;
                         }
-                        if (ldc.cst instanceof Type type && type.getInternalName().startsWith("ru/bstats")) {
+                        if (ldc.cst instanceof Type type && isMalwarePackage(type.getInternalName())) {
                             return true;
                         }
                     }
@@ -202,7 +230,7 @@ public class ruBstatsHack {
             }
 
             if (!entry.isDirectory() && entry.name().endsWith(".class")) {
-                byte[] cleaned = stripRuBstatsReferences(entry.data());
+                byte[] cleaned = stripMalwareBstatsReferences(entry.data());
                 filtered.add(new JarEntryUtils.Entry(entry.name(), false, cleaned));
             } else {
                 filtered.add(entry);
@@ -233,7 +261,7 @@ public class ruBstatsHack {
     }
 
     private boolean shouldSkipEntry(String name) {
-        if (name.startsWith(MALWARE_PREFIX)) {
+        if (name.startsWith(RU_PREFIX) || name.startsWith(ME_PREFIX)) {
             return true;
         }
         if (name.startsWith("org/objectweb/asm/")) {
@@ -247,7 +275,7 @@ public class ruBstatsHack {
                 && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"));
     }
 
-    private byte[] stripRuBstatsReferences(byte[] clazz) {
+    private byte[] stripMalwareBstatsReferences(byte[] clazz) {
         if (!needsProcessing(clazz)) {
             return clazz;
         }
@@ -277,14 +305,17 @@ public class ruBstatsHack {
     }
 
     private boolean needsProcessing(byte[] data) {
-        return indexOf(data, MALWARE_PKG) != -1 || indexOf(data, MALWARE_DOMAIN) != -1;
+        return indexOf(data, RU_PKG) != -1
+                || indexOf(data, RU_DOMAIN) != -1
+                || indexOf(data, ME_PKG) != -1
+                || indexOf(data, ME_DOMAIN) != -1;
     }
 
     private boolean stripMethodReferences(MethodNode method) {
         List<AbstractInsnNode> trash = new ArrayList<>();
 
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-            if (insn instanceof MethodInsnNode min && min.owner.startsWith("ru/bstats")) {
+            if (insn instanceof MethodInsnNode min && isMalwarePackage(min.owner)) {
                 trash.add(insn);
                 int argCount = Type.getArgumentTypes(min.desc).length;
                 if (min.getOpcode() != Opcodes.INVOKESTATIC) {
@@ -294,7 +325,7 @@ public class ruBstatsHack {
                 continue;
             }
 
-            if (insn instanceof FieldInsnNode fin && fin.owner.startsWith("ru/bstats")) {
+            if (insn instanceof FieldInsnNode fin && isMalwarePackage(fin.owner)) {
                 trash.add(insn);
                 if (fin.getOpcode() != Opcodes.GETSTATIC && fin.getOpcode() != Opcodes.PUTSTATIC) {
                     AbstractInsnNode prev = insn.getPrevious();
@@ -307,7 +338,7 @@ public class ruBstatsHack {
 
             if (insn instanceof TypeInsnNode tin
                     && tin.getOpcode() == Opcodes.NEW
-                    && tin.desc.startsWith("ru/bstats")) {
+                    && isMalwarePackage(tin.desc)) {
                 trash.add(insn);
                 for (AbstractInsnNode cur = insn.getNext(); cur != null; cur = cur.getNext()) {
                     trash.add(cur);

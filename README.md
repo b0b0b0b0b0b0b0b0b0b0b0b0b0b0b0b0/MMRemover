@@ -2,6 +2,8 @@
 
 **Minecraft Malware Remover** — программа для автоматической очистки вирусов с плагинов Minecraft.
 
+**Домены малвари для бана на хостинге:** актуальный список — [b0b0b0.dev/vb.json](https://b0b0b0.dev/vb.json) (JSON, можно парсить автоматически). Часть доменов уже мертва, но резать на DNS всё равно имеет смысл.
+
 ## Удаляет
 
 - Hostflow
@@ -10,7 +12,7 @@
 - PluginMetrics.jar
 - aph
 - ChbkHack
-- ruBstatsHack
+- ruBstatsHack (`ru/bstats`, `me/bstats` + `bstats.xyz`)
 - **SystemMetrics** (`panel.bstats.co`)
 
 ## SystemMetrics — чаморы и `panel.bstats.co`
@@ -30,13 +32,77 @@
 
 Домен **`panel.bstats.co`** имеет смысл резать на хостинге/DNS — пока чаморы не разнесли ещё плагины.
 
-## ru/bstats — `api-bstats.online`
+## ru/bstats — малварь `api-bstats.online` (adod_bstats)
 
-Фейковый bStats в пакете `ru/bstats`: `Metrics.load()` в `onEnable`, телеметрия на **`api-bstats.online`**, `InternalService` разносит заразу по другим JAR в `plugins/`.
+**Не путать с настоящим [bStats](https://bstats.org)** (`org.bstats`, метрики на `bstats.org`). Это отдельная семья бэкдоров, маскирующихся под bStats.
 
-Типичная ловушка при очистке: малварь вшивает **asm.jar + asm-tree.jar** внутрь плагина → в ZIP **дубли** (`module-info.class` ×3). Старый `ruBstatsHack` падал на 44-й записи и оставлял **пустышку из одного ASM** (~120 КБ вместо ~700 КБ).
+### Названия / следы в коде
 
-Сейчас: дедуп ZIP, вырезка `ru/bstats/*`, мусорного `org/objectweb/asm/`, `Metrics.load` из главного класса — **плагин остаётся целым**.
+| Как встречается | Что это |
+|-----------------|---------|
+| **adod_bstats** / **bstats.jar** | Отдельный «плагин» `name: bStats`, main `ru.bstats.Bootstrap` |
+| **`ru/bstats/`** | Вшито в leak-плагины (`Metrics.load()` в `onEnable`) |
+| **`me/bstats/`** | Вариант той же семьи (`MetricsConfig` → `bstats.xyz`, `adod_bstats.jar`) |
+| **C2** | `http://api-bstats.online`, зеркала через `/domain.list` |
+| **Автор (подписи)** | @adodovsky, NULLUDP, файл `крякерыпрочитайте.alexey` |
+
+User-Agent на C2: `Java/forchhh-core`. Ключ шифрования payload: `Make bstats great again!` + AES-GCM.
+
+### Как устроено (два слоя)
+
+**Слой 1 — видимый JAR** (`bstats.jar`, ~900 КБ):
+
+- `plugin.yml`: `name: bStats`, `main: ru.bstats.Bootstrap`
+- `data/1` — зашифрованный ZIP с payload (~850 КБ)
+- `ru.bstats.Bootstrap` — читает `data/1`, расшифровывает, грузит классы в память (`InMemoryLoader`)
+- Куча мусорных классов с рандомными пакетами — шум для анализа
+
+**Слой 2 — payload в памяти** (`ru.bstats.RemoteBootstrap`, `ru.bstats.a`, …):
+
+- Ищет последний **enabled**-плагин через Bukkit API
+- Вешается на него как «хост»
+- Глушит `System.out` / `System.err` (консоль сервера «тихая»)
+- Копирует `крякерыпрочитайте.alexey` в `getDataFolder()` плагина
+- Через вшитый **ASM** патчит **другие `.jar` в `plugins/`** на диске (персистентность)
+- Поддержка **Bukkit**, **BungeeCord**, **Velocity**
+
+Настоящего `org/bstats/` в этих JAR **нет**.
+
+### Что делает на сервере (не на Windows)
+
+| Действие | Описание |
+|----------|----------|
+| Регистрация на C2 | POST JSON: `id`, `owner`, `platform`, `ip`, `port`, `is_pc` |
+| Опрос команд | `poll` / `update` — ботнет, не «метрики» |
+| `cmd` / `shell` | На Windows: `cmd /c …` (только пока крутится `java.exe`) |
+| `mc` | Команды консоли Minecraft |
+| `download` | Скачать файл на диск сервера по URL |
+| `upload` | Отправить **конкретный** файл на C2 (hex), не автоматически |
+| Эксфиль | Список **имён** файлов в папке, куски `logs/latest.log` — **не** заливка всей сборки |
+
+**Не** вирус Windows: нет автозагрузки, реестра, служб. Работает только внутри процесса сервера. Удалил папку сервера — всё умерло.
+
+### Декой в коде (можно игнорировать)
+
+В `static {}` и константах — фейковые URL (`api.metrics.example.com`, `127.0.0.1`, китайские «пугалки» про Интерпол), неиспользуемые `@uuid`-строки. Нужны, чтобы отвлечь grep при реверсе. Реальный C2 — только `api-bstats.online` в `ru.bstats.d.a`.
+
+### Вшитый вариант (`ru/bstats`, `me/bstats` внутри leak-плагина)
+
+Отдельно от `bstats.jar`-дроппера: малварь сидит **внутри** чужого JAR.
+
+- В `onEnable` вызывается `Metrics.load()` или `MetricsBase.configure()`
+- C2: **`api-bstats.online`**, **`bstats.xyz`**
+- `InternalService` разносит заразу по **другим `.jar` в `plugins/`**
+- Вшивает **asm.jar + asm-tree.jar** → в ZIP появляются **дубли** (`module-info.class` ×3)
+
+### Как чистит MMRemover (`ruBstatsHack`)
+
+- Дедуп записей в ZIP (чтобы не осталась пустышка из одного ASM ~120 КБ вместо ~700 КБ)
+- Вырезка `ru/bstats/*`, `me/bstats/*`, мусорного `org/objectweb/asm/`
+- Удаление вызовов `Metrics.load` / `MetricsBase.configure` из главного класса
+- **Плагин остаётся целым**
+
+**`bstats.jar`** с `ru.bstats.Bootstrap` и `data/1` — это **отдельный дроппер**, не leak-плагин. Его **удаляют из `plugins/` целиком**; «починить» байткодом в рабочий плагин нельзя.
 
 ## Требования
 
@@ -54,7 +120,7 @@ Java **17+**
 ## Запуск
 
 ```bat
-javaw -jar MMRemover-1.21.jar
+javaw -jar MMRemover-1.22.jar
 ```
 
 Или батник рядом с jar:

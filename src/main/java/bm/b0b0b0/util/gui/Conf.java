@@ -16,7 +16,7 @@ import java.util.zip.ZipInputStream;
 
 public class Conf {
     private static final String CONFIG_FILE = "config.yml";
-    private static final int APP_CONFIG_VERSION = 5;
+    private static final int APP_CONFIG_VERSION = 6;
     private static final List<String> LANGUAGES = List.of("ru", "en");
 
     private Map<String, Object> config;
