@@ -1,4 +1,4 @@
-configVersion: 6
+configVersion: 8
 lang: "ru"
 ru:
   removeHostflowButton: "Удалить Hostflow"
@@ -136,6 +136,15 @@ ru:
   infectionSystemMetrics: "☠ SystemMetrics (%s) → %s"
   removingMethod: "Удаляем метод: %s"
   hollowClassWarning: "⚠ В JAR найдено %d пустых .class (0 байт) — плагин уже был битый до очистки. Возьми официальный JAR и очисти его, либо восстанови NMS-классы из оригинала."
+  updateAvailableTitle: "Доступно обновление"
+  updateAvailableSubtitle: "У вас v%s → доступна v%s"
+  updateCheckStart: "Проверка обновлений..."
+  updateCheckLatest: "Обновлений нет — у вас актуальная версия."
+  updateCheckFound: "Доступна новая версия: %s"
+  updateCheckSkipped: "Проверка обновлений пропущена (сервер недоступен или нет данных)."
+  updateDownloadButton: "Скачать"
+  updateLaterButton: "Позже"
+  updateOpenLinkFailed: "Не удалось открыть ссылку в браузере. Зайдите на страницу программы вручную."
 en:
   removeHostflowButton: "Remove Hostflow"
   removeArtemkaButton: "Remove Artemka"
@@ -271,3 +280,12 @@ en:
   infectionSystemMetrics: "☠ SystemMetrics (%s) → %s"
   removingMethod: "Removing method: %s"
   hollowClassWarning: "⚠ Found %d empty .class entries (0 bytes) — the JAR was already broken before cleanup. Use the official JAR and clean that, or restore NMS classes from the original."
+  updateAvailableTitle: "Update available"
+  updateAvailableSubtitle: "You have v%s → v%s is available"
+  updateCheckStart: "Checking for updates..."
+  updateCheckLatest: "You're up to date."
+  updateCheckFound: "New version available: %s"
+  updateCheckSkipped: "Update check skipped (server unavailable or no data)."
+  updateDownloadButton: "Download"
+  updateLaterButton: "Later"
+  updateOpenLinkFailed: "Could not open the link in your browser. Visit the program page manually."

@@ -1,5 +1,6 @@
 package bm.b0b0b0;
 
+import bm.b0b0b0.util.AppLinks;
 import bm.b0b0b0.util.gui.Conf;
 import bm.b0b0b0.util.gui.DragAndDropHandler;
 import bm.b0b0b0.util.gui.StyledButton;
@@ -10,6 +11,8 @@ import bm.b0b0b0.util.files.FileUtils;
 import bm.b0b0b0.util.gui.UIManagerUtil;
 import bm.b0b0b0.util.gui.LanguageSwitcher;
 import bm.b0b0b0.util.gui.load.LoadingDialog;
+import bm.b0b0b0.util.update.AppVersion;
+import bm.b0b0b0.util.update.UpdateChecker;
 
 import javax.swing.*;
 import java.awt.*;
@@ -44,11 +47,12 @@ public class MainWindow extends JFrame {
         this.conf = conf;
         initializeUI();
         setVisible(true);
+        UpdateChecker.checkForUpdates(conf, this, consoleArea);
     }
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v1.22)");
+        setTitle("MMRemover (v" + AppVersion.CURRENT + ")");
         setSize(800, 600);
         setMinimumSize(new Dimension(600, 400));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -221,7 +225,7 @@ public class MainWindow extends JFrame {
 
         visitWebsiteButton.addActionListener(e -> {
             try {
-                Desktop.getDesktop().browse(new URI("https://black-minecraft.com/resources/6091/"));
+                Desktop.getDesktop().browse(new URI(AppLinks.PROGRAM_PAGE));
             } catch (IOException | URISyntaxException ex) {
                 throw new RuntimeException(ex);
             }

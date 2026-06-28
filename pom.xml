@@ -6,7 +6,7 @@
 
     <groupId>bm.b0b0b0</groupId>
     <artifactId>MMRemover</artifactId>
-    <version>1.22</version>
+    <version>1.23</version>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>
@@ -49,6 +49,22 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>version.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>version.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -93,6 +109,10 @@
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                     <mainClass>bm.b0b0b0.MainWindow</mainClass>
+                                    <manifestEntries>
+                                        <Implementation-Title>MMRemover</Implementation-Title>
+                                        <Implementation-Version>${project.version}</Implementation-Version>
+                                    </manifestEntries>
                                 </transformer>
                             </transformers>
                             <filters>
