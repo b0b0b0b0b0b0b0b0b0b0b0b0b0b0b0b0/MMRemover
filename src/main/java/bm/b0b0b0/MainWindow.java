@@ -11,6 +11,9 @@ import bm.b0b0b0.util.files.FileUtils;
 import bm.b0b0b0.util.gui.UIManagerUtil;
 import bm.b0b0b0.util.gui.LanguageSwitcher;
 import bm.b0b0b0.util.gui.load.LoadingDialog;
+import bm.b0b0b0.util.inspector.Inspector;
+import bm.b0b0b0.util.inspector.model.BatchReport;
+import bm.b0b0b0.util.inspector.ui.InspectorDialog;
 import bm.b0b0b0.util.update.AppVersion;
 import bm.b0b0b0.util.update.UpdateChecker;
 
@@ -23,6 +26,9 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 
 public class MainWindow extends JFrame {
@@ -108,8 +114,13 @@ public class MainWindow extends JFrame {
                 UIManagerUtil.getTrashIcon(),
                 conf.getTranslation("clearInputListButton")
         );
+        JButton inspectInputButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getInspectorIcon(16),
+                conf.getTranslation("inspectInputPanelButton")
+        );
         JPanel inputHeader = UIManagerUtil.createPanelHeader(
-                conf.getTranslation("inputPanelTitle"), openInputFolderButton, clearInputListButton);
+                conf.getTranslation("inputPanelTitle"),
+                inspectInputButton, openInputFolderButton, clearInputListButton);
         inputPanelTitleLabel = (JLabel) inputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
         inputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         inputPanel.add(inputHeader, BorderLayout.NORTH);
@@ -131,8 +142,13 @@ public class MainWindow extends JFrame {
                 UIManagerUtil.getTrashIcon(),
                 conf.getTranslation("clearOutputListButton")
         );
+        JButton inspectOutputButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getInspectorIcon(16),
+                conf.getTranslation("inspectOutputPanelButton")
+        );
         JPanel outputHeader = UIManagerUtil.createPanelHeader(
-                conf.getTranslation("outputPanelTitle"), openOutputFolderButton, clearOutputListButton);
+                conf.getTranslation("outputPanelTitle"),
+                inspectOutputButton, openOutputFolderButton, clearOutputListButton);
         outputPanelTitleLabel = (JLabel) outputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
         outputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         outputPanel.add(outputHeader, BorderLayout.NORTH);
@@ -290,6 +306,9 @@ public class MainWindow extends JFrame {
             loadingDialog.setVisible(true);
         });
 
+        inspectInputButton.addActionListener(e -> runInspector(pluginsDir, inputList));
+        inspectOutputButton.addActionListener(e -> runInspector(Paths.get("out"), outputList));
+
         JButton chooseFolderButton = StyledButton.createModernButton(
                 conf.getTranslation("chooseFolderButton"),
                 UIManagerUtil.getFolderIcon(),
@@ -361,6 +380,82 @@ public class MainWindow extends JFrame {
         setVisible(true);
     }
 
+
+    private void runInspector(Path folder, JList<String> fileList) {
+        List<File> jars = resolveJarsToInspect(folder, fileList);
+        if (jars.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    String.format(conf.getTranslation("inspectNoJars"), folder.toAbsolutePath()),
+                    conf.getTranslation("inspectDialogTitle"),
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        runInspector(jars);
+    }
+
+    private List<File> resolveJarsToInspect(Path folder, JList<String> fileList) {
+        File dir = folder.toFile();
+        if (!dir.isDirectory()) {
+            JOptionPane.showMessageDialog(
+                    this,
+                    String.format(conf.getTranslation("inspectNoDir"), dir.getAbsolutePath()),
+                    conf.getTranslation("inspectDialogTitle"),
+                    JOptionPane.WARNING_MESSAGE);
+            return List.of();
+        }
+
+        String selected = fileList.getSelectedValue();
+        if (selected != null && selected.toLowerCase().endsWith(".jar")) {
+            File jar = folder.resolve(selected).toFile();
+            if (jar.isFile()) {
+                return List.of(jar);
+            }
+        }
+
+        File[] jarFiles = dir.listFiles((unused, name) -> name.toLowerCase().endsWith(".jar"));
+        if (jarFiles == null || jarFiles.length == 0) {
+            return List.of();
+        }
+
+        Arrays.sort(jarFiles, (a, b) -> a.getName().compareToIgnoreCase(b.getName()));
+        return new ArrayList<>(Arrays.asList(jarFiles));
+    }
+
+    private void runInspector(List<File> jars) {
+        LoadingDialog loadingDialog = new LoadingDialog(this, conf, "inspectLoadingTitle");
+        SwingWorker<BatchReport, String> worker = new SwingWorker<>() {
+            @Override
+            protected BatchReport doInBackground() {
+                return Inspector.inspectAll(jars, this::publish);
+            }
+
+            @Override
+            protected void process(List<String> chunks) {
+                if (!chunks.isEmpty()) {
+                    String latest = chunks.get(chunks.size() - 1);
+                    loadingDialog.setStatus(String.format(conf.getTranslation("inspectProgressFmt"), latest));
+                }
+            }
+
+            @Override
+            protected void done() {
+                loadingDialog.dispose();
+                try {
+                    BatchReport report = get();
+                    InspectorDialog.show(MainWindow.this, report, conf);
+                } catch (Exception exception) {
+                    JOptionPane.showMessageDialog(
+                            MainWindow.this,
+                            String.format(conf.getTranslation("inspectFailed"), exception.getMessage()),
+                            conf.getTranslation("inspectDialogTitle"),
+                            JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        };
+        worker.execute();
+        loadingDialog.setVisible(true);
+    }
 
     private void setWorkingDirectoryToJarLocation() {
         try {

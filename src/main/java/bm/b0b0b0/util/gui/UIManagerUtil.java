@@ -154,6 +154,54 @@ public class UIManagerUtil {
         return UIManager.getIcon("FileView.fileIcon");
     }
 
+    public static Icon getInspectorIcon() {
+        return getInspectorIcon(20);
+    }
+
+    public static Icon getInspectorIcon(int size) {
+        return createDrawnInspectorIcon(size);
+    }
+
+    private static Icon createDrawnInspectorIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                boolean enabled = c == null || c.isEnabled();
+                Color lens = enabled ? new Color(0x6BB5FF) : ICON_DISABLED_COLOR;
+                Color handle = enabled ? new Color(0xEBEBEB) : ICON_DISABLED_COLOR;
+                float stroke = Math.max(1.4f, size / 10f);
+                g2.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                float s = size / 20f;
+                int cx = x + Math.round(9 * s);
+                int cy = y + Math.round(9 * s);
+                int r = Math.round(6 * s);
+
+                g2.setColor(lens);
+                g2.drawOval(cx - r, cy - r, r * 2, r * 2);
+
+                int hx = cx + Math.round(r * 0.65f);
+                int hy = cy + Math.round(r * 0.65f);
+                g2.setColor(handle);
+                g2.drawLine(hx, hy, hx + Math.round(5 * s), hy + Math.round(5 * s));
+
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
     private static Icon createTintedResourceIcon(
             String resourcePath, int size, Color enabledTint, Color disabledTint) {
         URL url = UIManagerUtil.class.getResource(resourcePath);
