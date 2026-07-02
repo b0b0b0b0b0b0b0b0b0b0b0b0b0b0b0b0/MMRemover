@@ -30,6 +30,10 @@ public final class ThreatCatalog {
             "bstats.org",
             "spigotmc.org",
             "hub.spigotmc.org",
+            "bukkit.org",
+            "dev.bukkit.org",
+            "spiget.org",
+            "api.spiget.org",
             "papermc.io",
             "purpurmc.org",
             "leavesmc.org",
@@ -44,6 +48,17 @@ public final class ThreatCatalog {
             "repo.codemc.org",
             "repo.dmulloy2.net",
             "repo.essentialsx.net",
+            "essentialsx.net",
+            "ess3.net",
+            "luckperms.net",
+            "crafthead.net",
+            "dmulloy2.net",
+            "codemc.io",
+            "yaml.org",
+            "git.io",
+            "breezewiki.com",
+            "iban.com",
+            "rdiff-backup.net",
             "repo.md-5.net",
             "repo.minebench.de",
             "maven.enginehub.org",
@@ -51,10 +66,11 @@ public final class ThreatCatalog {
             "jira.jboss.org",
             "mojang.com",
             "minecraft.net",
+            "minecraftservices.com",
+            "api.minecraftservices.com",
             "sessionserver.mojang.com",
             "ely.by",
             "github.com",
-            "raw.githubusercontent.com",
             "bitbucket.org",
             "apache.org",
             "gnu.org",
@@ -83,9 +99,6 @@ public final class ThreatCatalog {
             "docs.advntr.dev",
             "appspot.com",
             "googleapis.com",
-            "pastebin.com",
-            "discord.com",
-            "discord.gg",
             "oracle.com",
             "openjdk.org",
             "wordpress.com",
@@ -112,6 +125,22 @@ public final class ThreatCatalog {
             "namemc.com",
             "spark.lucko.me",
             "lucko.me",
+            "goo.gl",
+            "minecraft-heads.com",
+            "helpch.at",
+            "wiki.helpch.at",
+    };
+
+    public static final String[] USER_CONTENT_HOST_MARKERS = {
+            "pastes.dev",
+            "pastebin.com",
+            "hastebin.com",
+            "paste.ee",
+            "rentry.co",
+            "rentry.org",
+            "dpaste.org",
+            "ghostbin.com",
+            "paste.helpch.at",
     };
 
     public static final String[] RESERVED_IP_PREFIXES = {
@@ -129,7 +158,9 @@ public final class ThreatCatalog {
     public static final Pattern URL_PATTERN =
             Pattern.compile("https?://[A-Za-z0-9._~:/?#\\[\\]@!$&'()*+,;=%-]+");
     public static final Pattern DISCORD_WEBHOOK =
-            Pattern.compile("https?://(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[\\w.-]+");
+            Pattern.compile("https?://(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[\\w.-]+(?:\\?thread_id=\\d+)?");
+    public static final Pattern DISCORD_INVITE =
+            Pattern.compile("https?://(?:ptb\\.|canary\\.)?discord(?:app)?\\.com/invite/[\\w-]+|https?://discord\\.gg/[\\w-]+");
     public static final Pattern TELEGRAM_BOT =
             Pattern.compile("https?://api\\.telegram\\.org/bot\\d+:[A-Za-z0-9_-]+");
     public static final Pattern SLACK_WEBHOOK =

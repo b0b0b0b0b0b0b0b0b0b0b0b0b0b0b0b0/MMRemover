@@ -21,7 +21,9 @@ public final class FindingCollector {
         if (text == null || text.isEmpty()) {
             return;
         }
-        harvestUrls(entryName, text, report);
+        if (!UrlClassifier.looksLikeRegexPattern(text)) {
+            harvestUrls(entryName, text, report);
+        }
         harvestIps(entryName, text, report);
         harvestWebhooks(entryName, text, report);
     }
@@ -40,6 +42,12 @@ public final class FindingCollector {
         Matcher matcher = ThreatCatalog.URL_PATTERN.matcher(text);
         while (matcher.find()) {
             String url = UrlClassifier.trimUrl(matcher.group());
+            if (!UrlClassifier.isPlausibleHarvestedUrl(url, text, matcher.end())) {
+                continue;
+            }
+            if (UrlClassifier.isWebhookUrl(url)) {
+                continue;
+            }
             String host = UrlClassifier.hostOf(url);
             if (host == null || host.isEmpty()) {
                 continue;

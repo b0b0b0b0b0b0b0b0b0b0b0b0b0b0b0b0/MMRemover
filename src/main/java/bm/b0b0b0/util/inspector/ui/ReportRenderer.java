@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 
 public final class ReportRenderer {
 
@@ -60,17 +59,17 @@ public final class ReportRenderer {
 
         appendFindings(builder, report, false);
 
-        if (report.pluginDescriptor != null) {
-            builder.append('\n');
-            appendBlock(builder, conf.getTranslation("inspLabelDescriptor"),
-                    () -> appendDescriptor(builder, report));
-        }
-
         Map<String, Set<String>> safe = report.urls.getOrDefault(UrlBucket.SAFE, Collections.emptyMap());
         if (!safe.isEmpty()) {
             builder.append('\n');
             appendBlock(builder, conf.getTranslation("inspLabelSafe"),
                     () -> appendSafeHosts(builder, safe));
+        }
+
+        if (report.pluginDescriptor != null) {
+            builder.append('\n');
+            appendBlock(builder, conf.getTranslation("inspLabelDescriptor"),
+                    () -> appendDescriptor(builder, report));
         }
 
         if (!report.runtimeUses.isEmpty()) {
@@ -219,18 +218,11 @@ public final class ReportRenderer {
     }
 
     private void appendSafeHosts(StringBuilder builder, Map<String, Set<String>> safe) {
-        Map<String, Integer> hostCounts = new TreeMap<>();
-        for (String url : safe.keySet()) {
-            String host = UrlClassifier.hostOf(url);
-            if (host != null) {
-                hostCounts.merge(host, 1, Integer::sum);
-            }
-        }
-        builder.append(String.format(conf.getTranslation("inspSafeCount"), hostCounts.size())).append('\n');
-        for (Map.Entry<String, Integer> entry : hostCounts.entrySet()) {
+        builder.append(String.format(conf.getTranslation("inspSafeCount"), safe.size())).append('\n');
+        for (Map.Entry<String, Set<String>> entry : safe.entrySet()) {
             builder.append("  • ").append(entry.getKey());
-            if (entry.getValue() > 1) {
-                builder.append(" ×").append(entry.getValue());
+            for (String source : entry.getValue()) {
+                builder.append(String.format(conf.getTranslation("inspUrlSource"), source));
             }
             builder.append('\n');
         }
