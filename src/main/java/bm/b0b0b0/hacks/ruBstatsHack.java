@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
@@ -39,7 +40,6 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
 public class ruBstatsHack {
 
@@ -137,13 +137,14 @@ public class ruBstatsHack {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
-        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(file);
-        int dupes = countDuplicateEntries(file) - all.size();
+        File src = CleanPipeline.sourceFile(file, outputDir);
+        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(src);
+        int dupes = countDuplicateEntries(src) - all.size();
         if (dupes > 0) {
             b0b0b0Dick.log(String.format(conf.getTranslation("zipDuplicatesMerged"), dupes));
         }
 
-        MalwareJarContext context = buildMalwareContext(file, all);
+        MalwareJarContext context = buildMalwareContext(src, all);
 
         List<JarEntryUtils.Entry> filtered = new ArrayList<>();
         for (JarEntryUtils.Entry entry : all) {
@@ -163,7 +164,7 @@ public class ruBstatsHack {
             }
         }
 
-        File outFile = new File(outputDir, generateUniqueFileName(outputDir, file.getName()));
+        File outFile = CleanPipeline.outputFile(outputDir, file.getName());
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
         JarEntryUtils.writeJar(outFile, removeEmptyDirectories(filtered));
 

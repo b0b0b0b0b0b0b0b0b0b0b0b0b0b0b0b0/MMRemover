@@ -1,7 +1,7 @@
 package bm.b0b0b0.util.update;
 
 import bm.b0b0b0.util.AppLinks;
-import bm.b0b0b0.util.files.FileUtils;
+import bm.b0b0b0.util.log.AppLogger;
 import bm.b0b0b0.util.gui.Conf;
 import bm.b0b0b0.util.gui.UpdateDialog;
 
@@ -48,10 +48,7 @@ public final class UpdateChecker {
     }
 
     private static void log(JTextArea console, String message) {
-        if (console == null) {
-            return;
-        }
-        SwingUtilities.invokeLater(() -> FileUtils.appendToConsole(console, message));
+        AppLogger.get().log(message);
     }
 
     private static UpdateInfo fetchLatest() throws Exception {

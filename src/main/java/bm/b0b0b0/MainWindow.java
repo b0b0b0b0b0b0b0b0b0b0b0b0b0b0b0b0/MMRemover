@@ -14,6 +14,7 @@ import bm.b0b0b0.util.gui.load.LoadingDialog;
 import bm.b0b0b0.util.inspector.Inspector;
 import bm.b0b0b0.util.inspector.model.BatchReport;
 import bm.b0b0b0.util.inspector.ui.InspectorDialog;
+import bm.b0b0b0.util.log.AppLogger;
 import bm.b0b0b0.util.update.AppVersion;
 import bm.b0b0b0.util.update.UpdateChecker;
 
@@ -161,6 +162,11 @@ public class MainWindow extends JFrame {
         consoleArea = new JTextArea(5, 20);
         consoleArea.setBackground(COLOR_CONSOLE_BG);
         consoleArea.setForeground(COLOR_CONSOLE_FG);
+        AppLogger.get().bindConsole(consoleArea);
+        AppLogger.get().openSession();
+        AppLogger.get().log(String.format(conf.getTranslation("sessionStart"), AppVersion.CURRENT));
+        AppLogger.get().log(conf.getTranslation("logFileTarget") + AppLogger.get().logFilePathDisplay());
+        AppLogger.get().log(conf.getTranslation("workingDirSet") + System.getProperty("user.dir"));
         FileListInteraction.enableFileDelete(inputList, consoleArea, conf,
                 () -> refreshFilesList(inputList, pluginsDir.toString()));
         FileListInteraction.enableFileDelete(outputList, consoleArea, conf,
@@ -168,6 +174,18 @@ public class MainWindow extends JFrame {
         JScrollPane consoleScrollPane = new JScrollPane(consoleArea);
         JPanel consolePanel = new JPanel(new BorderLayout(0, 2));
         consolePanel.setBackground(COLOR_MAIN_BG);
+        JButton openLogFolderButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getLogsFolderIcon(),
+                conf.getTranslation("openLogFolderButtonTooltip")
+        );
+        JButton openLogFileButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getLogFileIcon(),
+                conf.getTranslation("openLogFileButtonTooltip")
+        );
+        JButton clearLogArchivesButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getClearLogArchivesIcon(),
+                conf.getTranslation("clearLogArchivesButtonTooltip")
+        );
         JButton copyConsoleButton = UIManagerUtil.createIconButton(
                 UIManagerUtil.getCopyIcon(),
                 conf.getTranslation("copyConsoleButton")
@@ -177,7 +195,9 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("clearConsoleButton")
         );
         JPanel consoleHeader = UIManagerUtil.createPanelHeader(
-                conf.getTranslation("consolePanelTitle"), copyConsoleButton, clearConsoleButton);
+                conf.getTranslation("consolePanelTitle"),
+                openLogFolderButton, openLogFileButton, clearLogArchivesButton,
+                copyConsoleButton, clearConsoleButton);
         consoleHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         consolePanel.add(consoleHeader, BorderLayout.NORTH);
         consolePanel.add(consoleScrollPane, BorderLayout.CENTER);
@@ -271,14 +291,7 @@ public class MainWindow extends JFrame {
                 @Override
                 protected Void doInBackground() {
                     logCurrentDirectory(conf.getTranslation("cleanupAllStart"));
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "hostflow", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "artemka", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "bstatsjar", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "pluginmetrics", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "aph", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "chbkHack", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "ruBstatsHack", consoleArea, conf);
-                    FileProcessor.processFiles(new File(pluginsDir.toString()).toPath(), new File("out").toPath(), "systemMetricsHack", consoleArea, conf);
+                    FileProcessor.processAllFiles(pluginsDir, Paths.get("out"), consoleArea, conf);
                     return null;
                 }
 
@@ -357,6 +370,26 @@ public class MainWindow extends JFrame {
         });
 
         copyConsoleButton.addActionListener(e -> copyConsole());
+
+        openLogFolderButton.addActionListener(e ->
+                FileUtils.openFolder(AppLogger.get().logDirectory().toString(), consoleArea, conf));
+
+        openLogFileButton.addActionListener(e ->
+                FileUtils.openFile(AppLogger.get().currentLogFile().toFile(), conf));
+
+        clearLogArchivesButton.addActionListener(e -> {
+            if (!confirmAction(conf.getTranslation("confirmClearLogArchives"))) {
+                return;
+            }
+            int deleted = AppLogger.get().clearArchives();
+            if (deleted < 0) {
+                AppLogger.get().error(conf.getTranslation("logArchivesClearFailed"));
+            } else if (deleted == 0) {
+                AppLogger.get().info(conf.getTranslation("logArchivesNone"));
+            } else {
+                AppLogger.get().info(String.format(conf.getTranslation("logArchivesCleared"), deleted));
+            }
+        });
 
         clearConsoleButton.addActionListener(e -> {
             if (confirmAction(conf.getTranslation("confirmClearConsole"))) {
@@ -459,12 +492,21 @@ public class MainWindow extends JFrame {
 
     private void setWorkingDirectoryToJarLocation() {
         try {
-            File jarFile = new File(MainWindow.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            System.setProperty("user.dir", jarFile.getParent());
-            System.out.println(conf.getTranslation("workingDirSet") + System.getProperty("user.dir"));
+            File location = new File(MainWindow.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            File base = location.isDirectory()
+                    ? location.getParentFile().getParentFile()
+                    : location.getParentFile();
+            if (!new File(base, "input").isDirectory()) {
+                File parent = base.getParentFile();
+                if (parent != null && new File(parent, "input").isDirectory()) {
+                    base = parent;
+                }
+            }
+            System.setProperty("user.dir", base.getAbsolutePath());
+            pluginsDir = Paths.get(base.getAbsolutePath(), "input");
         } catch (URISyntaxException e) {
             e.printStackTrace();
-            System.err.println(conf.getTranslation("workingDirFailed"));
+            AppLogger.get().error(conf.getTranslation("workingDirFailed"));
         }
     }
 
@@ -484,7 +526,7 @@ public class MainWindow extends JFrame {
 
     private void refreshFilesList(JList<String> list, String folderName) {
         File folder = new File(folderName);
-        System.out.println(conf.getTranslation("checkingFolderExists") + ": " + folder.getAbsolutePath());
+        AppLogger.get().log(conf.getTranslation("checkingFolderExists") + ": " + folder.getAbsolutePath());
         int count = 0;
         if (folder.exists() && folder.isDirectory()) {
             String[] files = folder.list((dir, name) -> name.endsWith(".jar"));
@@ -495,7 +537,7 @@ public class MainWindow extends JFrame {
                 list.setListData(new String[0]);
             }
         } else {
-            System.out.println(conf.getTranslation("folderNotFound"));
+            AppLogger.get().log(conf.getTranslation("folderNotFound"));
             list.setListData(new String[0]);
         }
         updatePanelTitle(list, count);

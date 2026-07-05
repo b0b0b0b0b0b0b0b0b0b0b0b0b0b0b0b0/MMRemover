@@ -1,82 +1,100 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.asm.CaseInsensitiveClassRefFixer;
+import bm.b0b0b0.util.asm.CatchHandlerLocalFixer;
+import bm.b0b0b0.util.asm.DeadTryCatchRemover;
+import bm.b0b0b0.util.asm.JarClassWriter;
+import bm.b0b0b0.util.asm.OrphanPopRemover;
+import bm.b0b0b0.util.asm.TryCatchBlockPruner;
+import bm.b0b0b0.util.files.CleanPipeline;
+import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
-import org.objectweb.asm.*;
-import org.objectweb.asm.tree.*;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnList;
+import org.objectweb.asm.tree.InsnNode;
+import org.objectweb.asm.tree.LabelNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.LineNumberNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
+import org.objectweb.asm.tree.TypeInsnNode;
+import org.objectweb.asm.tree.VarInsnNode;
 
 import javax.swing.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
-
-import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
 public class chbkHack {
 
-    private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
-    private final Path          outputPath;
-    private final ExecutorService executor;
-    private final Conf          conf;
-
-    private static final List<String> BAD_CLASS_PREFIXES = Arrays.asList(
-            "org/apache/commons/lang3/text/",
-            "org/apache/commons/lang3/AccessMake",
-            "org/apache/commons/lang3/MutableUtilities",
+    private static final String[] BAD_CLASS_PREFIXES = {
             "org/apache/commons/lang3/packet/",
-            "org/apache/commons/lang3/ArrayFiller",
-            "org/apache/commons/lang3/ChatProtocol",
-            "org/apache/commons/lang3/ClearTitle",
-            "org/apache/commons/lang3/ClientChatProtocol",
-            "org/apache/commons/lang3/ClientCommandProtocol",
-            "org/apache/commons/lang3/ClientSetting",
-            "org/apache/commons/lang3/ClientStatusPacket",
-            "org/apache/commons/lang3/Command",
-            "org/apache/commons/lang3/EncryptionRequestEvent",
-            "org/apache/commons/lang3/EncryptionResponseEvent",
-            "org/apache/commons/lang3/EntityStatusPacket",
-            "org/apache/commons/lang3/GameStatus",
-            "org/apache/commons/lang3/GameStatus$DelayedFileOutputStream",
-            "org/apache/commons/lang3/HandshakeProtocol",
-            "org/apache/commons/lang3/KeepAliveEvent",
-            "org/apache/commons/lang3/KickEvent",
-            "org/apache/commons/lang3/LegacyHandshakeProtocol",
-            "org/apache/commons/lang3/LegacyHandshakeProtocol$Cache",
-            "org/apache/commons/lang3/LegacyPings",
-            "org/apache/commons/lang3/LegacyPings$ConstParameter",
-            "org/apache/commons/lang3/LegacyPings$IntConstParameter",
-            "org/apache/commons/lang3/LegacyPings$LongConstParameter",
-            "org/apache/commons/lang3/LegacyPings$StringConstParameter",
-            "org/apache/commons/lang3/LoginPayloadResponseProtocol",
-            "org/apache/commons/lang3/PingPacketEvent",
-            "org/apache/commons/lang3/PlayerListHeaderFooterProtocol",
-            "org/apache/commons/lang3/PlayerListItemEvent",
-            "org/apache/commons/lang3/PlayerListItemRemoveProtocol",
-            "org/apache/commons/lang3/PlayerListItemUpdateEvent",
-            "org/apache/commons/lang3/PluginMessageEvent",
-            "org/apache/commons/lang3/RespawnEvent",
-            "org/apache/commons/lang3/ScoreboardDisplayProtocol",
-            "org/apache/commons/lang3/ScoreboardObjectiveEvent",
-            "org/apache/commons/lang3/ScoreboardScoreProtocol",
-            "org/apache/commons/lang3/SetCompressionEvent",
-            "org/bukkit/plugin/Plugin",
-            "org/apache/commons/lang3/StatusRequestEvent"
-    );
+    };
+
+    private static final String[] CHAMBOR_LANG3_CLASSES = {
+            "org/apache/commons/lang3/AccessMake",
+    };
+
+    private static final String[] CHAMBOR_TEXT_PREFIXES = {
+            "org/apache/commons/lang3/text/TextChatComponent",
+            "org/apache/commons/lang3/text/ChatEncoders",
+            "org/apache/commons/lang3/text/RuntimeEnv",
+    };
+
+    private static final String MUTABLE_UTILITIES = "org/apache/commons/lang3/MutableUtilities";
+    private static final String MUTABLE_UTILITIES_CLASS = "org/apache/commons/lang3/MutableUtilities.class";
+    private static final byte[] CHAMBOR_URL = "http://basher.ru".getBytes(StandardCharsets.UTF_8);
+
+    private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
+    private final Path outputPath;
+    private final ExecutorService executor;
+    private final Conf conf;
+
+    public static void cleanJar(File src, File outputDir) throws IOException {
+        cleanJar(src, outputDir, new Conf());
+    }
+
+    public static void cleanJar(File src, File outputDir, Conf conf) throws IOException {
+        new chbkHack(conf, outputDir.toPath()).runRemover(src, outputDir);
+    }
+
+    private chbkHack(Conf conf, Path outputPath) {
+        this.conf = conf;
+        this.outputPath = outputPath;
+        this.executor = null;
+    }
 
     public chbkHack(Path pluginsPath, Path outputPath,
                     boolean removeMalware,
                     JTextArea consoleArea,
                     Conf conf) {
-
-        this.conf        = conf;
-        this.outputPath  = outputPath;
-        this.executor    = Executors.newFixedThreadPool(
-                Runtime.getRuntime().availableProcessors());
+        this.conf = conf;
+        this.outputPath = outputPath;
+        this.executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
         try {
             b0b0b0Dick.log(conf.getTranslation("scanningDirectory") + ": " + pluginsPath);
@@ -90,14 +108,16 @@ public class chbkHack {
 
             b0b0b0Dick.reportMalware(infectedFiles, consoleArea, conf);
 
-            if (removeMalware) cleanInfectedFiles();
+            if (removeMalware) {
+                cleanInfectedFiles();
+            }
             b0b0b0Dick.log(conf.getTranslation("done"));
-
         } catch (Exception e) {
             e.printStackTrace();
             b0b0b0Dick.log(conf.getTranslation("error") + ": " + e.getMessage());
         }
     }
+
     private void cleanInfectedFiles() {
         for (String path : infectedFiles) {
             try {
@@ -105,222 +125,635 @@ public class chbkHack {
                 b0b0b0Dick.log(conf.getTranslation("cleaningFile") + ": " + src.getAbsolutePath());
                 runRemover(src, outputPath.toFile());
             } catch (Throwable t) {
-                b0b0b0Dick.log("❌ " + t.getClass().getSimpleName()
-                        + ": " + t.getMessage());
+                b0b0b0Dick.log(conf.getTranslation("errorCleaningFile") + ": " + t.getMessage());
                 t.printStackTrace();
             }
         }
     }
 
     private void scanFile(File file) {
-        if (!file.getName().endsWith(".jar")) return;
+        if (!file.getName().endsWith(".jar")) {
+            return;
+        }
 
         try (ZipFile zip = new ZipFile(file)) {
-
             b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
 
-            final byte[] needle = "org/apache/commons/lang3/MutableUtilities".getBytes("UTF-8");
-
-            Enumeration<? extends ZipEntry> en = zip.entries();
-            while (en.hasMoreElements()) {
-                ZipEntry entry = en.nextElement();
-
-                if ("org/apache/commons/lang3/MutableUtilities.class".equals(entry.getName())) {
-                    tagInfected(file, conf.getTranslation("infectionMutableClassPresent"));
-                    return;
+            for (ZipEntry entry : zip.stream().toList()) {
+                if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                    continue;
                 }
-                if (!entry.getName().endsWith(".class")) continue;
-
-                byte[] data = toByteArray(zip.getInputStream(entry));
-                if (indexOf(data, needle) != -1) {
+                byte[] data = zip.getInputStream(entry).readAllBytes();
+                if (indexOf(data, CHAMBOR_URL) != -1) {
                     tagInfected(file, String.format(conf.getTranslation("infectionMutableString"), entry.getName()));
                     return;
                 }
-                if (indexOf(data, "MutableUtilities".getBytes("UTF-8")) == -1) {
+                if (indexOf(data, "MutableUtilities".getBytes(StandardCharsets.UTF_8)) == -1) {
                     continue;
                 }
                 try {
                     ClassReader cr = new ClassReader(data);
                     ClassNode cn = new ClassNode();
                     cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-                    if (containsMutableUtilities(cn)) {
+                    if (referencesMutableUtilities(cn)) {
                         tagInfected(file, String.format(conf.getTranslation("infectionMutableCalls"), entry.getName()));
                         return;
                     }
                 } catch (Throwable ignored) {
                 }
             }
-
         } catch (Throwable t) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("errorScanningFiles"), file.getName()) + ": " + t.getMessage());
+            b0b0b0Dick.log(String.format(conf.getTranslation("errorScanningFiles"), file.getName()));
         }
     }
 
     private void tagInfected(File file, String reason) {
+        if (infectedFiles.contains(file.getAbsolutePath())) {
+            return;
+        }
         infectedFiles.add(file.getAbsolutePath());
-        b0b0b0Dick.log(String.format(conf.getTranslation("infectionDetected"), reason, file.getName()));
+        b0b0b0Dick.log(reason + " (" + file.getName() + ")");
     }
 
     private void runRemover(File file, File outputDir) throws IOException {
-
-        if (!outputDir.exists() && !outputDir.mkdirs())
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
+        }
 
-        List<ZipEntryData> all = new ArrayList<>();
+        File src = CleanPipeline.sourceFile(file, outputDir);
+        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(src);
+        boolean jarInfected = isJarInfected(all);
 
-        try (ZipFile zip = new ZipFile(file)) {
-            Enumeration<? extends ZipEntry> en = zip.entries();
-            while (en.hasMoreElements()) {
-                ZipEntry e = en.nextElement();
-                byte[] data = e.isDirectory() ? null
-                        : toByteArray(zip.getInputStream(e));
-                all.add(new ZipEntryData(e.getName(), e.isDirectory(), data));
+        int totalClasses = 0;
+        int payloadClasses = 0;
+        List<String> patchTargets = new ArrayList<>();
+        Set<String> patchSet = new HashSet<>();
+        for (JarEntryUtils.Entry entry : all) {
+            if (entry.isDirectory() || !entry.name().endsWith(".class")) {
+                continue;
+            }
+            totalClasses++;
+            if (shouldSkipClass(entry.name(), jarInfected)) {
+                payloadClasses++;
+                continue;
+            }
+            if (mustPatchClass(entry.data())) {
+                patchTargets.add(entry.name());
+                patchSet.add(entry.name());
             }
         }
 
-        List<ZipEntryData> filtered = new ArrayList<>();
-        for (ZipEntryData zd : all) {
+        long bytecodePhaseStart = System.nanoTime();
+        b0b0b0Dick.log(String.format(conf.getTranslation("jarBytecodeStart"),
+                totalClasses, payloadClasses, patchTargets.size()));
 
-            if (!zd.isDirectory && zd.name.endsWith(".class")) {
+        Map<String, byte[]> jarClasses = patchTargets.isEmpty()
+                ? Map.of()
+                : JarClassWriter.indexClasses(all);
 
-                if (shouldSkipClass(zd.name)) {
-                    b0b0b0Dick.log(String.format(conf.getTranslation("classRemoved"), zd.name));
+        int patched = 0;
+        int removedPayload = 0;
+        List<JarEntryUtils.Entry> filtered = new ArrayList<>(all.size());
+        for (JarEntryUtils.Entry entry : all) {
+            if (!entry.isDirectory() && entry.name().endsWith(".class")) {
+                if (shouldSkipClass(entry.name(), jarInfected)) {
+                    removedPayload++;
                     continue;
                 }
 
-                byte[] cleaned;
-                try {
-                    cleaned = removeMutableUtilitiesCalls(zd.data);
-                } catch (Throwable ex) {
-                    b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"), zd.name, ex.getMessage()));
-                    cleaned = zd.data;
+                byte[] out = entry.data();
+                if (patchSet.contains(entry.name())) {
+                    out = cleanClass(entry, jarClasses);
+                    patched++;
+                    b0b0b0Dick.log(String.format(conf.getTranslation("jarBytecodeProgress"),
+                            patched, patchTargets.size(), patched, entry.name()));
+
+                    String internal = entry.name().substring(0, entry.name().length() - 6);
+                    jarClasses.put(entry.name(), out);
+                    jarClasses.put(internal, out);
                 }
-                filtered.add(new ZipEntryData(zd.name, false, cleaned));
-
+                filtered.add(new JarEntryUtils.Entry(entry.name(), false, out));
             } else {
-                filtered.add(zd);
+                filtered.add(entry);
             }
         }
 
-        List<ZipEntryData> finalList = removeEmptyDirectories(filtered);
+        if (removedPayload > 0) {
+            b0b0b0Dick.log(String.format(conf.getTranslation("jarPayloadRemoved"), removedPayload));
+        }
+        Map<String, String> caseCanonical = CaseInsensitiveClassRefFixer.canonicalNames(
+                filtered.stream().filter(e -> !e.isDirectory() && e.name().endsWith(".class")).map(JarEntryUtils.Entry::name).toList());
+        List<JarEntryUtils.Entry> finalized = new ArrayList<>(filtered.size());
+        for (JarEntryUtils.Entry entry : filtered) {
+            if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
+                finalized.add(entry);
+                continue;
+            }
+            byte[] fixed = CaseInsensitiveClassRefFixer.fix(entry.data(), caseCanonical);
+            finalized.add(new JarEntryUtils.Entry(entry.name(), false, fixed));
+        }
+        filtered = finalized;
+        double bytecodeSec = (System.nanoTime() - bytecodePhaseStart) / 1_000_000_000.0;
+        b0b0b0Dick.log(String.format(conf.getTranslation("jarBytecodeDone"), bytecodeSec));
 
-        File outFile = new File(outputDir,
-                generateUniqueFileName(outputDir, file.getName()));
+        File outFile = CleanPipeline.outputFile(outputDir, file.getName());
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
+        JarEntryUtils.writeJar(outFile, filtered);
 
-        try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outFile))) {
-            for (ZipEntryData z : finalList) {
-                out.putNextEntry(new ZipEntry(z.name));
-                if (!z.isDirectory) out.write(z.data);
+        if (outFile.length() > 0) {
+            b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outFile.getAbsolutePath()));
+        } else {
+            b0b0b0Dick.log(String.format(conf.getTranslation("failedToCreateCleanFile"), outFile.getAbsolutePath()));
+        }
+    }
+
+    private static boolean isJarInfected(List<JarEntryUtils.Entry> all) {
+        for (JarEntryUtils.Entry entry : all) {
+            if (!entry.isDirectory() && isMutableUtilitiesClass(entry.name())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean classReferencesMutableUtilities(byte[] clazz) {
+        try {
+            ClassReader cr = new ClassReader(clazz);
+            ClassNode cn = new ClassNode();
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return referencesMutableUtilities(cn);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private byte[] cleanClass(JarEntryUtils.Entry entry, Map<String, byte[]> jarClasses) {
+        try {
+            return patchMutableUtilitiesCalls(entry.data(), jarClasses);
+        } catch (Throwable ex) {
+            b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"), entry.name(), ex.getMessage()));
+            return entry.data();
+        }
+    }
+
+    private static boolean mustPatchClass(byte[] clazz) {
+        if (clazz == null || clazz.length == 0 || !containsMutableUtilitiesString(clazz)) {
+            return false;
+        }
+        try {
+            ClassReader cr = new ClassReader(clazz);
+            ClassNode cn = new ClassNode();
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return referencesMutableUtilities(cn);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private byte[] patchMutableUtilitiesCalls(byte[] clazz, Map<String, byte[]> jarClasses) {
+        ClassReader cr = new ClassReader(clazz);
+        ClassNode cn = new ClassNode();
+        cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.EXPAND_FRAMES);
+
+        boolean hasRefs = referencesMutableUtilities(cn);
+        boolean changed = false;
+        Set<String> touchedMethods = new HashSet<>();
+        for (MethodNode m : cn.methods) {
+            boolean methodChanged = false;
+            if (hasRefs) {
+                while (stripCalls(m)) {
+                    changed = true;
+                    methodChanged = true;
+                }
+            }
+            if (methodChanged) {
+                DeadTryCatchRemover.cleanMethod(m);
+            }
+            if (shouldStripChamborMethod(m, hasRefs, methodChanged) && stripChamborCatchAll(m)) {
+                changed = true;
+                methodChanged = true;
+            }
+            if (methodChanged) {
+                DeadTryCatchRemover.repairHandlerJumps(m);
+            }
+            if (methodChanged) {
+                while (OrphanPopRemover.cleanMethod(cn.name, m)) {
+                    TryCatchBlockPruner.prune(m);
+                }
+            }
+            if (methodChanged) {
+                touchedMethods.add(m.name + m.desc);
             }
         }
 
-        if (outFile.length() > 0)
-            b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"),
-                    outFile.getAbsolutePath()));
-        else
-            b0b0b0Dick.log(String.format(conf.getTranslation("errorCleaningFile"),
-                    file.getName()));
+        if (hasRefs && changed) {
+            for (MethodNode m : cn.methods) {
+                String key = m.name + m.desc;
+                if (!touchedMethods.contains(key) && CatchHandlerLocalFixer.needsFix(m, 800)) {
+                    touchedMethods.add(key);
+                }
+            }
+        }
+
+        if (!changed) {
+            return clazz;
+        }
+        return rewriteClassOrFallback(cr, cn, jarClasses, clazz, touchedMethods);
+    }
+
+    private byte[] rewriteClassOrFallback(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
+                                          byte[] fallback, Set<String> touchedMethods) {
+        try {
+            return JarClassWriter.writeModified(cn, jarClasses, touchedMethods);
+        } catch (Throwable primary) {
+            try {
+                return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods);
+            } catch (Throwable secondary) {
+                try {
+                    JarClassWriter.finalizeTouchedMethods(cn, touchedMethods);
+                    return JarClassWriter.writeFresh(cn, jarClasses);
+                } catch (Throwable fresh) {
+                    try {
+                        return JarClassWriter.writeMinimal(cr, cn);
+                    } catch (Throwable minimal) {
+                        try {
+                            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+                            cn.accept(cw);
+                            return cw.toByteArray();
+                        } catch (Throwable bare) {
+                            b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"),
+                                    cn.name + ".class", skipReason(bare)));
+                            return fallback;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static String skipReason(Throwable ex) {
+        String message = ex.getMessage();
+        if (message != null && !message.isBlank()) {
+            return message;
+        }
+        return ex.getClass().getSimpleName();
+    }
+
+    private static boolean containsMutableUtilitiesString(byte[] clazz) {
+        if (clazz == null || clazz.length == 0) {
+            return false;
+        }
+        String s = new String(clazz, StandardCharsets.ISO_8859_1);
+        return s.contains(MUTABLE_UTILITIES) || s.contains("MutableUtilities");
+    }
+
+    private static boolean shouldSkipClass(String name, boolean jarInfected) {
+        if (!name.endsWith(".class")) {
+            return false;
+        }
+        if (isMutableUtilitiesClass(name)) {
+            return true;
+        }
+        for (String prefix : CHAMBOR_TEXT_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        for (String prefix : CHAMBOR_LANG3_CLASSES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        for (String prefix : BAD_CLASS_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isMutableUtilitiesClass(String name) {
+        return MUTABLE_UTILITIES_CLASS.equals(name)
+                || name.startsWith("org/apache/commons/lang3/MutableUtilities$");
+    }
+
+    private static boolean isMutableUtilitiesType(String internal) {
+        return MUTABLE_UTILITIES.equals(internal)
+                || (internal != null && internal.startsWith(MUTABLE_UTILITIES + "$"));
+    }
+
+    private static boolean referencesMutableUtilities(ClassNode cn) {
+        for (MethodNode m : cn.methods) {
+            for (AbstractInsnNode ins : m.instructions) {
+                if (ins instanceof MethodInsnNode min && isMutableUtilitiesType(min.owner)) {
+                    return true;
+                }
+                if (ins instanceof FieldInsnNode fin && isMutableUtilitiesType(fin.owner)) {
+                    return true;
+                }
+                if (ins instanceof TypeInsnNode t && isMutableUtilitiesType(t.desc)
+                        && (t.getOpcode() == Opcodes.NEW || t.getOpcode() == Opcodes.INSTANCEOF
+                        || t.getOpcode() == Opcodes.CHECKCAST)) {
+                    return true;
+                }
+                if (ins instanceof LdcInsnNode ldc && ldc.cst instanceof Type type
+                        && isMutableUtilitiesType(type.getInternalName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean methodReferencesMutableUtilities(MethodNode m) {
+        for (AbstractInsnNode ins : m.instructions) {
+            if (ins instanceof MethodInsnNode min && isMutableUtilitiesType(min.owner)) {
+                return true;
+            }
+            if (ins instanceof FieldInsnNode fin && isMutableUtilitiesType(fin.owner)) {
+                return true;
+            }
+            if (ins instanceof TypeInsnNode t && isMutableUtilitiesType(t.desc)
+                    && (t.getOpcode() == Opcodes.NEW || t.getOpcode() == Opcodes.INSTANCEOF
+                    || t.getOpcode() == Opcodes.CHECKCAST)) {
+                return true;
+            }
+            if (ins instanceof LdcInsnNode ldc && ldc.cst instanceof Type type
+                    && isMutableUtilitiesType(type.getInternalName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isSystemMetricsMethod(MethodNode m) {
+        return "SystemMetrics".equals(m.name) || m.name.startsWith("lambda$SystemMetrics");
+    }
+
+    private static boolean shouldStripChamborMethod(MethodNode m, boolean classInfected, boolean methodChanged) {
+        if (methodReferencesMutableUtilities(m) || isSystemMetricsMethod(m)) {
+            return true;
+        }
+        if (!classInfected || m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
+            return false;
+        }
+        boolean hasBroadCatch = false;
+        for (TryCatchBlockNode block : m.tryCatchBlocks) {
+            if (block.type != null
+                    && !"java/lang/Throwable".equals(block.type)
+                    && !"java/lang/Exception".equals(block.type)
+                    && !"java/lang/Error".equals(block.type)) {
+                continue;
+            }
+            hasBroadCatch = true;
+            if (!DeadTryCatchRemover.isMalwareCatch(m, block)) {
+                return false;
+            }
+        }
+        return hasBroadCatch;
+    }
+
+    private static boolean stripChamborCatchAll(MethodNode m) {
+        if (m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
+            return false;
+        }
+        boolean changed = false;
+        Iterator<TryCatchBlockNode> it = m.tryCatchBlocks.iterator();
+        while (it.hasNext()) {
+            TryCatchBlockNode block = it.next();
+            if (!DeadTryCatchRemover.isMalwareCatch(m, block)) {
+                continue;
+            }
+            DeadTryCatchRemover.dropHandlerBlock(m, block);
+            it.remove();
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static boolean stripCalls(MethodNode m) {
+        List<AbstractInsnNode> trash = new ArrayList<>();
+        Set<Integer> maybeDeadLocals = new HashSet<>();
+        Set<AbstractInsnNode> scheduled = new HashSet<>();
+        boolean changed = false;
+
+        for (AbstractInsnNode n = m.instructions.getFirst(); n != null; n = n.getNext()) {
+            if (scheduled.contains(n)) {
+                continue;
+            }
+
+            if (n instanceof LdcInsnNode ldc && ldc.cst instanceof Type type
+                    && isMutableUtilitiesType(type.getInternalName())) {
+                ldc.cst = Type.getType("Ljava/lang/Object;");
+                changed = true;
+                continue;
+            }
+
+            if (n instanceof TypeInsnNode t && isMutableUtilitiesType(t.desc)) {
+                int op = n.getOpcode();
+                if (op == Opcodes.CHECKCAST) {
+                    scheduleInsn(trash, scheduled, n);
+                    changed = true;
+                    continue;
+                }
+                if (op == Opcodes.INSTANCEOF) {
+                    InsnList repl = new InsnList();
+                    repl.add(new InsnNode(Opcodes.POP));
+                    repl.add(new InsnNode(Opcodes.ICONST_0));
+                    m.instructions.insert(n, repl);
+                    scheduleInsn(trash, scheduled, n);
+                    changed = true;
+                    continue;
+                }
+            }
+
+            if (n instanceof FieldInsnNode fin && isMutableUtilitiesType(fin.owner)) {
+                scheduleInsn(trash, scheduled, n);
+                if (fin.getOpcode() != Opcodes.PUTSTATIC && fin.getOpcode() != Opcodes.PUTFIELD) {
+                    collectArgumentLoads(trash, scheduled, realPrevious(n), 1);
+                }
+                changed = true;
+                continue;
+            }
+
+            if (n instanceof MethodInsnNode min && isMutableUtilitiesType(min.owner)) {
+                scheduleInsn(trash, scheduled, n);
+                int argCount = Type.getArgumentTypes(min.desc).length;
+                if (min.getOpcode() != Opcodes.INVOKESTATIC) {
+                    argCount++;
+                }
+                collectArgumentLoads(trash, scheduled, realPrevious(n), argCount);
+                AbstractInsnNode prev = realPrevious(n);
+                if (prev != null && prev.getOpcode() == Opcodes.NEW
+                        && prev instanceof TypeInsnNode prevType
+                        && isMutableUtilitiesType(prevType.desc)) {
+                    scheduleInsn(trash, scheduled, prev);
+                }
+                if (!Type.VOID_TYPE.equals(Type.getReturnType(min.desc))) {
+                    AbstractInsnNode after = realNext(n);
+                    if (after != null
+                            && (after.getOpcode() == Opcodes.POP || after.getOpcode() == Opcodes.POP2)) {
+                        scheduleInsn(trash, scheduled, after);
+                    }
+                }
+                changed = true;
+                continue;
+            }
+
+            if (n.getOpcode() == Opcodes.NEW
+                    && n instanceof TypeInsnNode t
+                    && isMutableUtilitiesType(t.desc)) {
+                changed = true;
+                AbstractInsnNode prev = realPrevious(n);
+                if (prev != null && isAstore(prev)) {
+                    maybeDeadLocals.add(((VarInsnNode) prev).var);
+                    scheduleInsn(trash, scheduled, prev);
+                    AbstractInsnNode prev2 = realPrevious(prev);
+                    if (prev2 != null && prev2.getOpcode() == Opcodes.ACONST_NULL) {
+                        scheduleInsn(trash, scheduled, prev2);
+                    }
+                }
+                boolean done = false;
+                for (AbstractInsnNode cur = n; cur != null && !done; cur = cur.getNext()) {
+                    scheduleInsn(trash, scheduled, cur);
+                    int op = cur.getOpcode();
+                    if (op == Opcodes.POP || op == Opcodes.POP2) {
+                        done = true;
+                        continue;
+                    }
+                    if (op == Opcodes.RETURN || op == Opcodes.ARETURN) {
+                        done = true;
+                        continue;
+                    }
+                    if (cur instanceof MethodInsnNode call && isMutableUtilitiesType(call.owner)) {
+                        if (call.getOpcode() == Opcodes.INVOKESPECIAL) {
+                            AbstractInsnNode after = realNext(cur);
+                            if (after != null
+                                    && (after.getOpcode() == Opcodes.POP || after.getOpcode() == Opcodes.POP2)) {
+                                scheduleInsn(trash, scheduled, after);
+                            } else if (after != null
+                                    && after.getOpcode() != Opcodes.RETURN
+                                    && after.getOpcode() != Opcodes.ARETURN) {
+                                continue;
+                            }
+                        }
+                        done = true;
+                        continue;
+                    }
+                    if (op == Opcodes.ASTORE) {
+                        maybeDeadLocals.add(((VarInsnNode) cur).var);
+                        done = true;
+                    }
+                }
+            }
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        if (!trash.isEmpty()) {
+            trash.forEach(m.instructions::remove);
+        }
+
+        boolean swept;
+        do {
+            swept = stripRemainingMuAllocations(m);
+            if (swept) {
+                changed = true;
+            }
+        } while (swept);
+
+        if (m.localVariables != null && !maybeDeadLocals.isEmpty()) {
+            Set<Integer> used = new HashSet<>();
+            for (AbstractInsnNode q = m.instructions.getFirst(); q != null; q = q.getNext()) {
+                if (q instanceof VarInsnNode v) {
+                    used.add(v.var);
+                }
+            }
+            m.localVariables.removeIf(lv -> maybeDeadLocals.contains(lv.index) && !used.contains(lv.index));
+        }
+        return true;
+    }
+
+    private static boolean stripRemainingMuAllocations(MethodNode m) {
+        boolean changed = false;
+        for (AbstractInsnNode n = m.instructions.getFirst(); n != null; n = n.getNext()) {
+            if (n.getOpcode() != Opcodes.NEW || !(n instanceof TypeInsnNode t) || !isMutableUtilitiesType(t.desc)) {
+                continue;
+            }
+            List<AbstractInsnNode> block = new ArrayList<>();
+            boolean done = false;
+            for (AbstractInsnNode cur = n; cur != null && !done; cur = cur.getNext()) {
+                if (cur instanceof LabelNode || cur instanceof LineNumberNode || cur instanceof FrameNode) {
+                    continue;
+                }
+                block.add(cur);
+                int op = cur.getOpcode();
+                if (op == Opcodes.POP || op == Opcodes.POP2 || op == Opcodes.RETURN || op == Opcodes.ARETURN) {
+                    done = true;
+                } else if (cur instanceof MethodInsnNode call && isMutableUtilitiesType(call.owner)) {
+                    done = true;
+                } else if (op == Opcodes.GOTO) {
+                    done = true;
+                }
+            }
+            block.forEach(m.instructions::remove);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private static void scheduleInsn(List<AbstractInsnNode> trash, Set<AbstractInsnNode> scheduled, AbstractInsnNode insn) {
+        if (insn != null && scheduled.add(insn)) {
+            trash.add(insn);
+        }
+    }
+
+    private static void collectArgumentLoads(List<AbstractInsnNode> trash,
+                                             Set<AbstractInsnNode> scheduled,
+                                             AbstractInsnNode start,
+                                             int count) {
+        AbstractInsnNode cur = start;
+        for (int i = 0; i < count && cur != null; i++) {
+            scheduleInsn(trash, scheduled, cur);
+            cur = realPrevious(cur);
+        }
+    }
+
+    private static AbstractInsnNode realPrevious(AbstractInsnNode n) {
+        AbstractInsnNode p = n.getPrevious();
+        while (p != null && (p instanceof LabelNode || p instanceof FrameNode || p instanceof LineNumberNode)) {
+            p = p.getPrevious();
+        }
+        return p;
+    }
+
+    private static AbstractInsnNode realNext(AbstractInsnNode n) {
+        AbstractInsnNode next = n.getNext();
+        while (next != null && (next instanceof LabelNode || next instanceof FrameNode || next instanceof LineNumberNode)) {
+            next = next.getNext();
+        }
+        return next;
+    }
+
+    private static boolean isAstore(AbstractInsnNode insn) {
+        return insn.getOpcode() == Opcodes.ASTORE;
     }
 
     private static int indexOf(byte[] hay, byte[] needle) {
         if (needle.length == 0 || hay.length < needle.length) {
             return -1;
         }
-        outer: for (int i = 0; i <= hay.length - needle.length; i++) {
-            for (int j = 0; j < needle.length; j++)
-                if (hay[i + j] != needle[j]) continue outer;
+        outer:
+        for (int i = 0; i <= hay.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (hay[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
             return i;
         }
         return -1;
     }
-
-    private boolean containsMutableUtilities(ClassNode cn) {
-        for (MethodNode m : cn.methods)
-            for (AbstractInsnNode ins : m.instructions)
-                if (ins.getOpcode() == Opcodes.NEW &&
-                        ins instanceof TypeInsnNode t &&
-                        "org/apache/commons/lang3/MutableUtilities".equals(t.desc))
-                    return true;
-        return false;
-    }
-
-    private boolean shouldSkipClass(String name) {
-        if (!name.endsWith(".class")) return false;
-        for (String p : BAD_CLASS_PREFIXES)
-            if (name.startsWith(p)) return true;
-        return false;
-    }
-
-    private byte[] removeMutableUtilitiesCalls(byte[] clazz) {
-        ClassReader cr = new ClassReader(clazz);
-        ClassNode cn = new ClassNode();
-        cr.accept(cn, 0);
-        for (MethodNode m : cn.methods) stripCalls(m);
-        ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-        cn.accept(cw);
-        return cw.toByteArray();
-    }
-
-    private void stripCalls(MethodNode m) {
-        List<AbstractInsnNode> trash = new ArrayList<>();
-        Set<Integer> maybeDeadLocals = new HashSet<>();
-
-        for (AbstractInsnNode n = m.instructions.getFirst(); n != null; n = n.getNext()) {
-            if (n.getOpcode() == Opcodes.NEW &&
-                    n instanceof TypeInsnNode t &&
-                    "org/apache/commons/lang3/MutableUtilities".equals(t.desc)) {
-
-                AbstractInsnNode p = n.getPrevious();
-                if (p != null && p.getOpcode() == Opcodes.ASTORE) {
-                    maybeDeadLocals.add(((VarInsnNode) p).var);
-                    AbstractInsnNode p2 = p.getPrevious();
-                    if (p2 != null && p2.getOpcode() == Opcodes.ACONST_NULL) trash.add(p2);
-                    trash.add(p);
-                }
-                for (AbstractInsnNode cur = n; cur != null; cur = cur.getNext()) {
-                    trash.add(cur);
-                    int op = cur.getOpcode();
-                    if (op == Opcodes.POP || op == Opcodes.POP2 || op == Opcodes.ASTORE) {
-                        if (op == Opcodes.ASTORE) maybeDeadLocals.add(((VarInsnNode) cur).var);
-                        break;
-                    }
-                }
-            }
-        }
-        trash.forEach(m.instructions::remove);
-
-        if (m.localVariables != null && !maybeDeadLocals.isEmpty()) {
-            Set<Integer> used = new HashSet<>();
-            for (AbstractInsnNode q = m.instructions.getFirst(); q != null; q = q.getNext())
-                if (q instanceof VarInsnNode v) used.add(v.var);
-            m.localVariables.removeIf(lv -> maybeDeadLocals.contains(lv.index) && !used.contains(lv.index));
-        }
-    }
-
-    private byte[] toByteArray(InputStream in) throws IOException {
-        ByteArrayOutputStream b = new ByteArrayOutputStream();
-        byte[] buf = new byte[8192];
-        int r;
-        while ((r = in.read(buf)) != -1) b.write(buf, 0, r);
-        return b.toByteArray();
-    }
-
-    private List<ZipEntryData> removeEmptyDirectories(List<ZipEntryData> list) {
-        Set<String> nonEmpty = new HashSet<>();
-        for (ZipEntryData z : list)
-            if (!z.isDirectory) {
-                String path = z.name;
-                for (int idx = path.lastIndexOf('/');
-                     idx != -1;
-                     idx = path.lastIndexOf('/', idx - 1))
-                    nonEmpty.add(path.substring(0, idx + 1));
-            }
-        List<ZipEntryData> res = new ArrayList<>();
-        for (ZipEntryData z : list)
-            if (!z.isDirectory || nonEmpty.contains(z.name))
-                res.add(z);
-        return res;
-    }
-    private record ZipEntryData(String name, boolean isDirectory, byte[] data) {}
 }

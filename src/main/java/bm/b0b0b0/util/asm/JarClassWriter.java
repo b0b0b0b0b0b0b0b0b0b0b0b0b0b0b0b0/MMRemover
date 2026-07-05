@@ -1,0 +1,259 @@
+package bm.b0b0b0.util.asm;
+
+import bm.b0b0b0.util.files.JarEntryUtils;
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.MethodNode;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+public final class JarClassWriter {
+
+    private JarClassWriter() {
+    }
+
+    public static Map<String, byte[]> indexClasses(List<JarEntryUtils.Entry> all) {
+        Map<String, byte[]> map = new HashMap<>();
+        for (JarEntryUtils.Entry entry : all) {
+            if (!entry.isDirectory() && entry.name().endsWith(".class") && entry.data() != null) {
+                String internal = entry.name().substring(0, entry.name().length() - ".class".length());
+                map.put(entry.name(), entry.data());
+                map.put(internal, entry.data());
+            }
+        }
+        return map;
+    }
+
+    public static byte[] writePatchedMethods(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
+                                             Set<String> touchedMethodKeys) {
+        if (touchedMethodKeys.isEmpty()) {
+            return writePreserving(cr, cn);
+        }
+        for (MethodNode method : cn.methods) {
+            if (!touchedMethodKeys.contains(method.name + method.desc)) {
+                continue;
+            }
+            TryCatchBlockPruner.prune(method);
+            BytecodeSanitizer.sanitizeChangedMethod(cn.name, method);
+            while (OrphanPopRemover.cleanMethod(cn.name, method)) {
+                TryCatchBlockPruner.prune(method);
+            }
+            TryCatchBlockDeduplicator.dedupe(method);
+            TryCatchBlockPruner.prune(method);
+            FrameRecomputer.stripFrames(method);
+            method.localVariables = null;
+        }
+        TryCatchBlockPruner.prune(cn);
+        stripAllFrames(cn);
+        try {
+            return emitComputedFrames(cn, jarClasses);
+        } catch (Throwable primary) {
+            finalizeTouchedMethods(cn, touchedMethodKeys);
+            return writeFresh(cn, jarClasses);
+        }
+    }
+
+    public static void finalizeTouchedMethods(ClassNode cn, Set<String> touchedMethodKeys) {
+        for (MethodNode method : cn.methods) {
+            if (!touchedMethodKeys.contains(method.name + method.desc)) {
+                continue;
+            }
+            if (CatchHandlerLocalFixer.needsFix(method, 800)) {
+                CatchHandlerLocalFixer.fix(method);
+            }
+            TryCatchBlockDeduplicator.dedupe(method);
+            TryCatchBlockPruner.prune(method);
+            while (OrphanPopRemover.cleanMethod(cn.name, method)) {
+                TryCatchBlockPruner.prune(method);
+            }
+            FrameRecomputer.stripFrames(method);
+            method.localVariables = null;
+        }
+        TryCatchBlockPruner.prune(cn);
+    }
+
+    public static byte[] writeFresh(ClassNode cn, Map<String, byte[]> jarClasses) {
+        TryCatchBlockPruner.prune(cn);
+        stripAllFrames(cn);
+        try {
+            return emitComputedFrames(cn, jarClasses);
+        } catch (Throwable primary) {
+            try {
+                FrameRecomputer.recompute(cn, jarClasses);
+                return emitPrecomputedFrames(cn, jarClasses);
+            } catch (Throwable secondary) {
+                ClassWriter cw = new JarAwareClassWriter(
+                        ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+                cn.accept(cw);
+                return cw.toByteArray();
+            }
+        }
+    }
+
+    public static byte[] writePreserving(ClassReader cr, ClassNode cn) {
+        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+        cn.accept(cw);
+        return cw.toByteArray();
+    }
+
+    public static byte[] writeTree(ClassNode cn, Map<String, byte[]> jarClasses) {
+        return writeModified(cn, jarClasses);
+    }
+
+    public static byte[] writeModified(ClassNode cn, Map<String, byte[]> jarClasses) {
+        return writeModified(cn, jarClasses, null);
+    }
+
+    private static final int CATCH_FIX_MAX_INSNS = 800;
+
+    public static byte[] writeModified(ClassNode cn, Map<String, byte[]> jarClasses, Set<String> touchedMethodKeys) {
+        ClassNode working = cloneClass(cn);
+        TryCatchBlockPruner.prune(working);
+        TryCatchBlockDeduplicator.dedupe(working);
+        TryCatchBlockPruner.prune(working);
+        if (touchedMethodKeys != null && !touchedMethodKeys.isEmpty()) {
+            for (MethodNode method : working.methods) {
+                if (!touchedMethodKeys.contains(method.name + method.desc)) {
+                    continue;
+                }
+                if (CatchHandlerLocalFixer.needsFix(method, CATCH_FIX_MAX_INSNS)) {
+                    CatchHandlerLocalFixer.fix(method);
+                }
+            }
+        }
+        stripAllFrames(working);
+        try {
+            return emitComputedFrames(working, jarClasses);
+        } catch (Throwable primary) {
+            TryCatchBlockPruner.prune(working);
+            stripAllFrames(working);
+            try {
+                return emitComputedFrames(working, jarClasses);
+            } catch (Throwable secondary) {
+                FrameRecomputer.recompute(working, jarClasses);
+                return emitPrecomputedFrames(working, jarClasses);
+            }
+        }
+    }
+
+    private static byte[] emitPrecomputedFrames(ClassNode cn, Map<String, byte[]> jarClasses) {
+        ClassWriter cw = new JarAwareClassWriter(ClassWriter.COMPUTE_MAXS, jarClasses);
+        cn.accept(cw);
+        return cw.toByteArray();
+    }
+
+    private static byte[] emitComputedFrames(ClassNode cn, Map<String, byte[]> jarClasses) {
+        ClassWriter cw = new JarAwareClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+        cn.accept(cw);
+        return cw.toByteArray();
+    }
+
+    private static void stripAllFrames(ClassNode cn) {
+        for (MethodNode method : cn.methods) {
+            FrameRecomputer.stripFrames(method);
+        }
+    }
+
+    public static byte[] write(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
+        try {
+            ClassNode working = cloneClass(cn);
+            BytecodeSanitizer.sanitize(working);
+            TryCatchBlockPruner.prune(working);
+            FrameRecomputer.recompute(working, jarClasses);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            working.accept(cw);
+            return cw.toByteArray();
+        } catch (Throwable primary) {
+            try {
+                return writeLenient(cr, cn, jarClasses);
+            } catch (Throwable lenient) {
+                return emitComputed(cr, cn, jarClasses);
+            }
+        }
+    }
+
+    public static byte[] writeMinimal(ClassReader cr, ClassNode cn) {
+        ClassNode working = cloneClass(cn);
+        TryCatchBlockPruner.prune(working);
+        OrphanPopRemover.clean(working);
+        TryCatchBlockPruner.prune(working);
+        ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+        working.accept(cw);
+        return cw.toByteArray();
+    }
+
+    public static byte[] writeLenient(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
+        ClassNode working = cloneClass(cn);
+        TryCatchBlockDeduplicator.dedupe(working);
+        TryCatchBlockPruner.prune(working);
+        try {
+            FrameRecomputer.recompute(working, jarClasses);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            working.accept(cw);
+            return cw.toByteArray();
+        } catch (Throwable ignored) {
+            return emitComputed(cr, working, jarClasses);
+        }
+    }
+
+    public static byte[] writeComputed(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
+        ClassNode working = cloneClass(cn);
+        BytecodeSanitizer.sanitize(working);
+        TryCatchBlockPruner.prune(working);
+        return emitComputed(cr, working, jarClasses);
+    }
+
+    public static byte[] emitComputed(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
+        try {
+            ClassWriter cw = new JarAwareClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+            cn.accept(cw);
+            return cw.toByteArray();
+        } catch (Throwable ignored) {
+            try {
+                FrameRecomputer.recompute(cn, jarClasses);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                cn.accept(cw);
+                return cw.toByteArray();
+            } catch (Throwable ignored2) {
+                ClassWriter cw = new JarAwareClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+                cn.accept(cw);
+                return cw.toByteArray();
+            }
+        }
+    }
+
+    private static ClassNode cloneClass(ClassNode cn) {
+        ClassWriter cw = new ClassWriter(0);
+        cn.accept(cw);
+        ClassReader reader = new ClassReader(cw.toByteArray());
+        ClassNode clone = new ClassNode();
+        reader.accept(clone, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        return clone;
+    }
+
+    private static final class JarAwareClassWriter extends ClassWriter {
+
+        private final VerifyStubClassLoader stubLoader;
+
+        JarAwareClassWriter(ClassReader cr, int flags, Map<String, byte[]> jarClasses) {
+            super(cr, flags);
+            this.stubLoader = new VerifyStubClassLoader(jarClasses, getClass().getClassLoader());
+            this.stubLoader.predefineJarClasses();
+        }
+
+        JarAwareClassWriter(int flags, Map<String, byte[]> jarClasses) {
+            super(flags);
+            this.stubLoader = new VerifyStubClassLoader(jarClasses, getClass().getClassLoader());
+            this.stubLoader.predefineJarClasses();
+        }
+
+        @Override
+        protected String getCommonSuperClass(String type1, String type2) {
+            return stubLoader.commonSuperClass(type1, type2);
+        }
+    }
+}

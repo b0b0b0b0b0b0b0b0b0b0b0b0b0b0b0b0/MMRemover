@@ -1,26 +1,18 @@
 package bm.b0b0b0.util.files;
 
 import bm.b0b0b0.util.gui.Conf;
+import bm.b0b0b0.util.log.AppLogger;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 
 public class FileUtils {
 
-    private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
-
-    public static String formatLogLine(String message) {
-        return "[" + LocalTime.now().format(LOG_TIME) + "] " + message;
-    }
-
     public static void appendToConsole(JTextArea consoleArea, String message) {
-        consoleArea.append(formatLogLine(message) + "\n");
-        consoleArea.setCaretPosition(consoleArea.getDocument().getLength());
+        AppLogger.get().log(message);
     }
 
     public static void openFolder(String folderName, JTextArea consoleArea, Conf conf) {
@@ -35,6 +27,19 @@ public class FileUtils {
         } else {
             appendToConsole(consoleArea, String.format(conf.getTranslation("folderNotFound"), folder.getName()));
         }
+    }
+
+    public static void openFile(File file, Conf conf) {
+        if (file.isFile()) {
+            try {
+                Desktop.getDesktop().open(file);
+                AppLogger.get().log(String.format(conf.getTranslation("logFileOpened"), file.getName()));
+            } catch (IOException e) {
+                AppLogger.get().error(String.format(conf.getTranslation("errorOpeningLogFile"), file.getName()));
+            }
+            return;
+        }
+        AppLogger.get().warn(conf.getTranslation("logFileNotFound"));
     }
 
     public static void clearFolder(Path folderPath, JTextArea consoleArea, Conf conf) {

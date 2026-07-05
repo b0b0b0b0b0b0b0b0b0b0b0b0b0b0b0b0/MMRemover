@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
@@ -22,7 +23,6 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
 
 public class systemMetricsHack {
 
@@ -204,15 +204,29 @@ public class systemMetricsHack {
         b0b0b0Dick.log(String.format(conf.getTranslation("infectionSystemMetrics"), classEntry, file.getName()));
     }
 
+    private static final String MUTABLE_UTILITIES_CLASS = "org/apache/commons/lang3/MutableUtilities.class";
+
+    private static boolean containsMutableUtilitiesPayload(File jar) {
+        try (ZipFile zip = new ZipFile(jar)) {
+            return zip.getEntry(MUTABLE_UTILITIES_CLASS) != null;
+        } catch (IOException ignored) {
+            return false;
+        }
+    }
+
     private void runRemover(File file, File outputDir) throws IOException {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
+        File src = CleanPipeline.sourceFile(file, outputDir);
+        if (containsMutableUtilitiesPayload(src)) {
+            return;
+        }
         Set<String> entriesToClean = new HashSet<>();
-        for (String mainClass : readMainClasses(file)) {
+        for (String mainClass : readMainClasses(src)) {
             String mainEntry = toClassEntry(mainClass);
-            byte[] bytecode = readClassEntry(file, mainEntry);
+            byte[] bytecode = readClassEntry(src, mainEntry);
             if (bytecode != null && isInfectedMainClass(bytecode)) {
                 entriesToClean.add(mainEntry);
             }
@@ -221,7 +235,7 @@ public class systemMetricsHack {
             return;
         }
 
-        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(file);
+        List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(src);
         int hollowClassCount = 0;
         for (JarEntryUtils.Entry entry : all) {
             if (!entry.isDirectory() && entry.name().endsWith(".class")
@@ -246,7 +260,7 @@ public class systemMetricsHack {
             }
         }
 
-        File outFile = new File(outputDir, generateUniqueFileName(outputDir, file.getName()));
+        File outFile = CleanPipeline.outputFile(outputDir, file.getName());
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
         JarEntryUtils.writeJar(outFile, cleaned);
 
@@ -261,7 +275,7 @@ public class systemMetricsHack {
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
-            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.EXPAND_FRAMES);
+            cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
             boolean changed = false;
             Iterator<MethodNode> iterator = cn.methods.iterator();
@@ -284,7 +298,7 @@ public class systemMetricsHack {
                 return clazz;
             }
 
-            ClassWriter cw = new ClassWriter(cr, 0);
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
             cn.accept(cw);
             return cw.toByteArray();
         } catch (Throwable ignored) {

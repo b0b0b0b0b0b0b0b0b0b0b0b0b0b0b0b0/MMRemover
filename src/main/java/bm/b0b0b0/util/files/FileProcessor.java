@@ -9,8 +9,34 @@ import java.nio.file.Path;
 
 public class FileProcessor {
 
+    private static final String[] ALL_TYPES = {
+            "hostflow", "artemka", "bstatsjar", "pluginmetrics", "aph",
+            "chbkHack", "ruBstatsHack", "systemMetricsHack"
+    };
+
+    public static void processAllFiles(Path inputPath, Path outputPath, JTextArea consoleArea, Conf conf) {
+        File outputFolder = outputPath.toFile();
+        CleanPipeline.beginUnified(outputFolder);
+        try {
+            FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileProcessingStart"));
+            for (String type : ALL_TYPES) {
+                processFiles(inputPath, outputPath, type, consoleArea, conf, false);
+            }
+            FileUtils.appendToConsole(consoleArea, conf.getTranslation("processingCompleted"));
+        } finally {
+            CleanPipeline.endUnified();
+        }
+    }
+
     public static void processFiles(Path inputPath, Path outputPath, String type, JTextArea consoleArea, Conf conf) {
-        FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileProcessingStart"));
+        processFiles(inputPath, outputPath, type, consoleArea, conf, true);
+    }
+
+    private static void processFiles(Path inputPath, Path outputPath, String type,
+                                     JTextArea consoleArea, Conf conf, boolean logStart) {
+        if (logStart) {
+            FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileProcessingStart"));
+        }
         File inputFolder = inputPath.toFile();
         File outputFolder = outputPath.toFile();
 
@@ -26,25 +52,10 @@ public class FileProcessor {
                 }
 
                 if (outputFolder.isDirectory()) {
-                    if ("hostflow".equalsIgnoreCase(type)) {
-                        new HostFlow(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("artemka".equalsIgnoreCase(type)) {
-                        new Artemka(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("bstatsjar".equalsIgnoreCase(type)) {
-                        new bStatsJar(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("pluginmetrics".equalsIgnoreCase(type)) {
-                        new PluginMetrics(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("aph".equalsIgnoreCase(type)) {
-                        new aph(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("chbkHack".equalsIgnoreCase(type)) {
-                        new chbkHack(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("ruBstatsHack".equalsIgnoreCase(type)) {
-                        new ruBstatsHack(inputPath, outputPath, true, consoleArea, conf);
-                    } else if ("systemMetricsHack".equalsIgnoreCase(type)) {
-                        new systemMetricsHack(inputPath, outputPath, true, consoleArea, conf);
+                    runHack(inputPath, outputPath, type, consoleArea, conf);
+                    if (logStart) {
+                        FileUtils.appendToConsole(consoleArea, conf.getTranslation("processingCompleted"));
                     }
-
-                    FileUtils.appendToConsole(consoleArea, conf.getTranslation("processingCompleted"));
                 } else {
                     FileUtils.appendToConsole(consoleArea, conf.getTranslation("errorNotADirectoryOut"));
                 }
@@ -56,5 +67,24 @@ public class FileProcessor {
             e.printStackTrace();
         }
     }
-}
 
+    private static void runHack(Path inputPath, Path outputPath, String type, JTextArea consoleArea, Conf conf) {
+        if ("hostflow".equalsIgnoreCase(type)) {
+            new HostFlow(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("artemka".equalsIgnoreCase(type)) {
+            new Artemka(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("bstatsjar".equalsIgnoreCase(type)) {
+            new bStatsJar(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("pluginmetrics".equalsIgnoreCase(type)) {
+            new PluginMetrics(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("aph".equalsIgnoreCase(type)) {
+            new aph(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("chbkHack".equalsIgnoreCase(type)) {
+            new chbkHack(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("ruBstatsHack".equalsIgnoreCase(type)) {
+            new ruBstatsHack(inputPath, outputPath, true, consoleArea, conf);
+        } else if ("systemMetricsHack".equalsIgnoreCase(type)) {
+            new systemMetricsHack(inputPath, outputPath, true, consoleArea, conf);
+        }
+    }
+}

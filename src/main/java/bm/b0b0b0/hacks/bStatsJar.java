@@ -25,7 +25,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
-import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
+import bm.b0b0b0.util.files.CleanPipeline;
 
 public class bStatsJar {
 
@@ -115,10 +115,12 @@ public class bStatsJar {
 
     private void runRemover(File file, String maliciousClassName) {
         try {
-            File outputFile = new File(outputPath.toFile(), generateUniqueFileName(outputPath.toFile(), file.getName()));
+            File outputDir = outputPath.toFile();
+            File src = CleanPipeline.sourceFile(file, outputDir);
+            File outputFile = CleanPipeline.outputFile(outputDir, file.getName());
             b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outputFile.getAbsolutePath()));
 
-            try (ZipFile zip = new ZipFile(file);
+            try (ZipFile zip = new ZipFile(src);
                  ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outputFile))) {
 
                 Enumeration<? extends ZipEntry> entries = zip.entries();

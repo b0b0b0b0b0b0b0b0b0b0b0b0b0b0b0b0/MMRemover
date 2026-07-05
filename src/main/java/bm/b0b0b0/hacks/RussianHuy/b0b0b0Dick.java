@@ -1,7 +1,7 @@
 package bm.b0b0b0.hacks.RussianHuy;
 
 import bm.b0b0b0.util.gui.Conf;
-import bm.b0b0b0.util.files.FileUtils;
+import bm.b0b0b0.util.log.AppLogger;
 
 import javax.swing.JTextArea;
 import java.io.InputStream;
@@ -10,19 +10,14 @@ import java.util.zip.ZipOutputStream;
 
 public final class b0b0b0Dick {
     private static volatile JTextArea consoleArea;
+
     public static void setConsole(JTextArea area) {
         consoleArea = area;
+        AppLogger.get().bindConsole(area);
     }
+
     public static void log(String message) {
-        String line = FileUtils.formatLogLine(message);
-        System.out.println(line);
-        JTextArea area = consoleArea;
-        if (area != null) {
-            javax.swing.SwingUtilities.invokeLater(() -> {
-                area.append(line + '\n');
-                area.setCaretPosition(area.getDocument().getLength());
-            });
-        }
+        AppLogger.get().log(message);
     }
     public static void reportMalware(List<String> infectedFiles, JTextArea areaFromUI, Conf conf) {
 

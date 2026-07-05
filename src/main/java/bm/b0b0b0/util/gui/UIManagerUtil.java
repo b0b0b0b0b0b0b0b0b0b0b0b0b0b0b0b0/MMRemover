@@ -345,6 +345,157 @@ public class UIManagerUtil {
         return createDrawnCopyIcon(size);
     }
 
+    public static Icon getLogFileIcon() {
+        return getLogFileIcon(16);
+    }
+
+    public static Icon getLogFileIcon(int size) {
+        return createDrawnLogFileIcon(size);
+    }
+
+    public static Icon getLogsFolderIcon() {
+        return getLogsFolderIcon(16);
+    }
+
+    public static Icon getLogsFolderIcon(int size) {
+        return createDrawnLogsFolderIcon(size);
+    }
+
+    public static Icon getClearLogArchivesIcon() {
+        return getClearLogArchivesIcon(16);
+    }
+
+    public static Icon getClearLogArchivesIcon(int size) {
+        return createDrawnClearLogArchivesIcon(size);
+    }
+
+    private static Icon createDrawnClearLogArchivesIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                float s = size / 16f;
+                Color stroke = c.isEnabled() ? new Color(0xE57373) : ICON_DISABLED_COLOR;
+                g2.setColor(stroke);
+                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
+
+                int doc1X = x + Math.round(3 * s);
+                int doc1Y = y + Math.round(2 * s);
+                int docW = Math.round(7 * s);
+                int docH = Math.round(9 * s);
+                g2.drawRoundRect(doc1X, doc1Y, docW, docH, Math.round(1 * s), Math.round(1 * s));
+                g2.drawRoundRect(doc1X + Math.round(2 * s), doc1Y + Math.round(1 * s),
+                        docW, docH, Math.round(1 * s), Math.round(1 * s));
+
+                int cx = x + Math.round(11 * s);
+                int cy = y + Math.round(11 * s);
+                int r = Math.round(3 * s);
+                g2.drawLine(cx - r, cy - r, cx + r, cy + r);
+                g2.drawLine(cx + r, cy - r, cx - r, cy + r);
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
+    private static Icon createDrawnLogFileIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color stroke = c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR;
+                g2.setColor(stroke);
+                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
+
+                float s = size / 16f;
+                int docX = x + Math.round(3 * s);
+                int docY = y + Math.round(2 * s);
+                int docW = Math.round(10 * s);
+                int docH = Math.round(12 * s);
+                int foldX = x + Math.round(8 * s);
+                int r = Math.max(1, Math.round(1.5f * s));
+
+                g2.drawRoundRect(docX, docY, docW, docH, r, r);
+                g2.drawLine(foldX, docY, foldX, y + Math.round(6 * s));
+                g2.drawLine(foldX, y + Math.round(6 * s), docX + docW, y + Math.round(6 * s));
+
+                int lineLeft = docX + Math.round(2 * s);
+                int lineRight = docX + docW - Math.round(2 * s);
+                int lineY = y + Math.round(8 * s);
+                for (int i = 0; i < 3; i++) {
+                    g2.drawLine(lineLeft, lineY, lineRight - (i == 2 ? Math.round(2 * s) : 0), lineY);
+                    lineY += Math.round(2 * s);
+                }
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
+    private static Icon createDrawnLogsFolderIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color stroke = c.isEnabled() ? new Color(0x09b55d) : ICON_DISABLED_COLOR;
+                g2.setColor(stroke);
+                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
+
+                float s = size / 16f;
+                int tabX = x + Math.round(2 * s);
+                int tabY = y + Math.round(4 * s);
+                int tabW = Math.round(6 * s);
+                int tabH = Math.round(3 * s);
+                int bodyX = x + Math.round(2 * s);
+                int bodyY = y + Math.round(6 * s);
+                int bodyW = Math.round(12 * s);
+                int bodyH = Math.round(8 * s);
+
+                g2.drawRoundRect(tabX, tabY, tabW, tabH, Math.round(1 * s), Math.round(1 * s));
+                g2.drawRoundRect(bodyX, bodyY, bodyW, bodyH, Math.round(2 * s), Math.round(2 * s));
+
+                int docX = bodyX + Math.round(3 * s);
+                int docY = bodyY + Math.round(2 * s);
+                g2.setColor(c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
+                g2.drawRoundRect(docX, docY, Math.round(5 * s), Math.round(4 * s), Math.round(1 * s), Math.round(1 * s));
+                g2.drawLine(docX + Math.round(1 * s), docY + Math.round(2 * s),
+                        docX + Math.round(4 * s), docY + Math.round(2 * s));
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
     private static Icon createDrawnCopyIcon(int size) {
         return new Icon() {
             @Override

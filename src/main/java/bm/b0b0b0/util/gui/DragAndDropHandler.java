@@ -1,9 +1,8 @@
 package bm.b0b0b0.util.gui;
 
-import bm.b0b0b0.util.files.FileUtils;
+import bm.b0b0b0.util.log.AppLogger;
 
 import javax.swing.*;
-import java.awt.*;
 import java.awt.datatransfer.*;
 import java.awt.dnd.*;
 import java.io.File;
@@ -38,26 +37,25 @@ public class DragAndDropHandler {
                         Path targetDir = Paths.get(folderName).toAbsolutePath();
                         if (!Files.exists(targetDir)) {
                             Files.createDirectories(targetDir);
-                            System.out.println(conf.getTranslation("directoryCreated") + ": " + targetDir);
+                            AppLogger.get().log(conf.getTranslation("directoryCreated") + ": " + targetDir);
                         }
 
-                        System.out.println(conf.getTranslation("dropCurrentDir") + ": " + System.getProperty("user.dir"));
-                        System.out.println(conf.getTranslation("copyingFilesToDir") + ": " + targetDir);
+                        AppLogger.get().log(conf.getTranslation("dropCurrentDir") + ": " + System.getProperty("user.dir"));
+                        AppLogger.get().log(conf.getTranslation("copyingFilesToDir") + ": " + targetDir);
 
                         for (File file : droppedFiles) {
                             if (file.getName().endsWith(".jar")) {
                                 Path destFile = targetDir.resolve(file.getName());
                                 try {
                                     Files.copy(file.toPath(), destFile, StandardCopyOption.REPLACE_EXISTING);
-                                    FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileAdded") + ": " + file.getName());
-                                    System.out.println(conf.getTranslation("fileCopied") + ": " + destFile);
+                                    AppLogger.get().log(conf.getTranslation("fileAdded") + ": " + file.getName());
+                                    AppLogger.get().log(conf.getTranslation("fileCopied") + ": " + destFile);
                                 } catch (Exception e) {
                                     e.printStackTrace();
-                                    FileUtils.appendToConsole(consoleArea, conf.getTranslation("errorCopyingFile") + ": " + file.getName() + " -> " + destFile);
-                                    System.out.println(conf.getTranslation("errorCopyingFile") + ": " + file.getName() + " -> " + destFile);
+                                    AppLogger.get().error(conf.getTranslation("errorCopyingFile") + ": " + file.getName() + " -> " + destFile);
                                 }
                             } else {
-                                FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileIgnored") + ": " + file.getName());
+                                AppLogger.get().log(conf.getTranslation("fileIgnored") + ": " + file.getName());
                             }
                         }
                         refreshFilesList.accept(list, targetDir.toString());
@@ -67,7 +65,7 @@ public class DragAndDropHandler {
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
-                    FileUtils.appendToConsole(consoleArea, conf.getTranslation("errorProcessingFiles") + ": " + e.getMessage());
+                    AppLogger.get().error(conf.getTranslation("errorProcessingFiles") + ": " + e.getMessage());
                     dtde.dropComplete(false);
                 }
             }

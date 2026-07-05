@@ -27,7 +27,7 @@ import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
-import static bm.b0b0b0.util.files.FileUtils.generateUniqueFileName;
+import bm.b0b0b0.util.files.CleanPipeline;
 
 public class Artemka {
 
@@ -127,10 +127,11 @@ public class Artemka {
     }
 
     private void runRemover(File file, File outputDirectory) throws Throwable {
-        File outputFile = new File(outputDirectory, generateUniqueFileName(outputDirectory, file.getName()));
+        File src = CleanPipeline.sourceFile(file, outputDirectory);
+        File outputFile = CleanPipeline.outputFile(outputDirectory, file.getName());
         b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outputFile.getAbsolutePath()));
 
-        try (ZipFile zip = new ZipFile(file);
+        try (ZipFile zip = new ZipFile(src);
              ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outputFile))) {
 
             Enumeration<? extends ZipEntry> entries = zip.entries();
