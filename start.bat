@@ -29,7 +29,8 @@ for /f "delims=" %%f in ('dir /b /o-d "target\MMRemover*.jar" 2^>nul') do (
 
 echo.
 echo [ОШИБКА] Файл MMRemover-*.jar не найден в этой папке.
-echo Положите jar рядом с start.bat или скачайте релиз с GitHub.
+echo Положите jar в ту же папку, где лежит start.bat
+echo (обычно MMRemover на рабочем столе — рядом с start.bat).
 echo.
 pause
 exit /b 1
