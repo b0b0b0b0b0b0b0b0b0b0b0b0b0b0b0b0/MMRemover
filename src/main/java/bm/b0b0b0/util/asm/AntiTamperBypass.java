@@ -2,6 +2,7 @@ package bm.b0b0b0.util.asm;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.Opcodes;
+import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FrameNode;
@@ -41,8 +42,24 @@ public final class AntiTamperBypass {
         return new String(clazz, StandardCharsets.ISO_8859_1).contains(HASH_ERROR);
     }
 
+    public static boolean mayNeedBypass(byte[] clazz) {
+        if (clazz == null || clazz.length == 0) {
+            return false;
+        }
+        String s = new String(clazz, StandardCharsets.ISO_8859_1);
+        if (s.contains(HASH_ERROR)) {
+            return true;
+        }
+        if (!s.contains("MutableUtilities")) {
+            return false;
+        }
+        return s.contains("java/io/IOException")
+                || s.contains("java/lang/IllegalAccessException")
+                || s.contains("java/lang/RuntimeException");
+    }
+
     public static byte[] bypass(byte[] clazz, Map<String, byte[]> jarClasses) {
-        if (clazz == null || clazz.length == 0 || !containsHashError(clazz)) {
+        if (clazz == null || clazz.length == 0 || !mayNeedBypass(clazz)) {
             return clazz;
         }
         ClassReader cr = new ClassReader(clazz);
@@ -70,10 +87,10 @@ public final class AntiTamperBypass {
                 return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods);
             } catch (Throwable secondary) {
                 try {
-                    return JarClassWriter.emitComputed(cr, cn, jarClasses);
+                    return JarClassWriter.writePreserving(cr, cn);
                 } catch (Throwable tertiary) {
                     try {
-                        return JarClassWriter.writePreserving(cr, cn);
+                        return JarClassWriter.emitComputed(cr, cn, jarClasses);
                     } catch (Throwable quaternary) {
                         return clazz;
                     }
@@ -96,19 +113,32 @@ public final class AntiTamperBypass {
             if (match == null) {
                 continue;
             }
+            LabelNode target = new LabelNode();
             AbstractInsnNode after = realNext(throwInsn);
             if (after == null) {
-                continue;
+                method.instructions.add(target);
+                method.instructions.add(new InsnNode(returnOpcode(method)));
+            } else {
+                method.instructions.insert(throwInsn, target);
             }
-            LabelNode target = new LabelNode();
             method.instructions.insertBefore(match.start, new JumpInsnNode(Opcodes.GOTO, target));
-            method.instructions.insert(throwInsn, target);
             for (AbstractInsnNode node : match.nodes) {
                 method.instructions.remove(node);
             }
             changed = true;
         }
         return changed;
+    }
+
+    private static int returnOpcode(MethodNode method) {
+        return switch (Type.getReturnType(method.desc).getSort()) {
+            case Type.BOOLEAN, Type.BYTE, Type.CHAR, Type.SHORT, Type.INT -> Opcodes.IRETURN;
+            case Type.FLOAT -> Opcodes.FRETURN;
+            case Type.LONG -> Opcodes.LRETURN;
+            case Type.DOUBLE -> Opcodes.DRETURN;
+            case Type.ARRAY, Type.OBJECT -> Opcodes.ARETURN;
+            default -> Opcodes.RETURN;
+        };
     }
 
     private static boolean removeOrphanAthrow(MethodNode method) {

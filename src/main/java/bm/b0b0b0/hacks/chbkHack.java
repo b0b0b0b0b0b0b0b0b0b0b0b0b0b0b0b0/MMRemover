@@ -5,7 +5,6 @@ import bm.b0b0b0.util.asm.AntiTamperBypass;
 import bm.b0b0b0.util.asm.CaseInsensitiveClassRefFixer;
 import bm.b0b0b0.util.asm.DeadTryCatchRemover;
 import bm.b0b0b0.util.asm.JarClassWriter;
-import bm.b0b0b0.util.asm.MutableUtilitiesStub;
 import bm.b0b0b0.util.asm.OrphanPopRemover;
 import bm.b0b0b0.util.asm.TryCatchBlockPruner;
 import bm.b0b0b0.util.files.CleanPipeline;
@@ -289,17 +288,23 @@ public class chbkHack {
             b0b0b0Dick.log(String.format(conf.getTranslation("jarPayloadRemoved"), removedPayload));
         }
         if (jarInfected) {
-            filtered.add(new JarEntryUtils.Entry(MUTABLE_UTILITIES_CLASS, false, MutableUtilitiesStub.classBytes()));
-            jarClasses.put(MUTABLE_UTILITIES_CLASS, MutableUtilitiesStub.classBytes());
-            jarClasses.put(MUTABLE_UTILITIES, MutableUtilitiesStub.classBytes());
-        }
-        if (jarInfected) {
+            jarClasses = JarClassWriter.indexClasses(filtered);
+            Set<String> antiTamperTargets = new HashSet<>(patchSet);
+            for (JarEntryUtils.Entry entry : filtered) {
+                if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
+                    continue;
+                }
+                if (AntiTamperBypass.containsHashError(entry.data())) {
+                    antiTamperTargets.add(entry.name());
+                }
+            }
+            int bypassedCount = 0;
             for (int i = 0; i < filtered.size(); i++) {
                 JarEntryUtils.Entry entry = filtered.get(i);
                 if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
                     continue;
                 }
-                if (!AntiTamperBypass.containsHashError(entry.data())) {
+                if (!antiTamperTargets.contains(entry.name())) {
                     continue;
                 }
                 byte[] bypassed = AntiTamperBypass.bypass(entry.data(), jarClasses);
@@ -307,6 +312,11 @@ public class chbkHack {
                     filtered.set(i, new JarEntryUtils.Entry(entry.name(), false, bypassed));
                     jarClasses.put(entry.name(), bypassed);
                     jarClasses.put(entry.name().substring(0, entry.name().length() - 6), bypassed);
+                }
+                bypassedCount++;
+                if (bypassedCount % 5 == 0 || bypassedCount == antiTamperTargets.size()) {
+                    b0b0b0Dick.log(String.format(conf.getTranslation("jarBytecodeProgress"),
+                            bypassedCount, antiTamperTargets.size(), bypassedCount, entry.name()));
                 }
             }
         }
@@ -643,9 +653,6 @@ public class chbkHack {
             }
 
             if (n instanceof MethodInsnNode min && isMutableUtilitiesType(min.owner)) {
-                if (isMutableUtilitiesPluginConstructor(min)) {
-                    continue;
-                }
                 scheduleInsn(trash, scheduled, n);
                 int argCount = Type.getArgumentTypes(min.desc).length;
                 if (min.getOpcode() != Opcodes.INVOKESTATIC) {
@@ -672,9 +679,6 @@ public class chbkHack {
             if (n.getOpcode() == Opcodes.NEW
                     && n instanceof TypeInsnNode t
                     && isMutableUtilitiesType(t.desc)) {
-                if (isStubSafeMuAllocation(n)) {
-                    continue;
-                }
                 changed = true;
                 AbstractInsnNode prev = realPrevious(n);
                 if (prev != null && isAstore(prev)) {
@@ -748,38 +752,10 @@ public class chbkHack {
         return true;
     }
 
-    private static boolean isMutableUtilitiesPluginConstructor(MethodInsnNode min) {
-        return min.getOpcode() == Opcodes.INVOKESPECIAL
-                && "<init>".equals(min.name)
-                && "(Lorg/bukkit/plugin/Plugin;)V".equals(min.desc)
-                && isMutableUtilitiesType(min.owner);
-    }
-
-    private static boolean isStubSafeMuAllocation(AbstractInsnNode newInsn) {
-        if (!(newInsn instanceof TypeInsnNode typeInsn)
-                || newInsn.getOpcode() != Opcodes.NEW
-                || !isMutableUtilitiesType(typeInsn.desc)) {
-            return false;
-        }
-        AbstractInsnNode cur = realNext(newInsn);
-        if (!(cur instanceof InsnNode dupInsn) || dupInsn.getOpcode() != Opcodes.DUP) {
-            return false;
-        }
-        cur = realNext(cur);
-        if (!(cur instanceof VarInsnNode aload) || aload.getOpcode() != Opcodes.ALOAD) {
-            return false;
-        }
-        cur = realNext(cur);
-        return cur instanceof MethodInsnNode init && isMutableUtilitiesPluginConstructor(init);
-    }
-
     private static boolean stripRemainingMuAllocations(MethodNode m) {
         boolean changed = false;
         for (AbstractInsnNode n = m.instructions.getFirst(); n != null; n = n.getNext()) {
             if (n.getOpcode() != Opcodes.NEW || !(n instanceof TypeInsnNode t) || !isMutableUtilitiesType(t.desc)) {
-                continue;
-            }
-            if (isStubSafeMuAllocation(n)) {
                 continue;
             }
             List<AbstractInsnNode> block = new ArrayList<>();
