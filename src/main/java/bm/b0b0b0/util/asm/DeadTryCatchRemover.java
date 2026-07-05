@@ -33,10 +33,15 @@ public final class DeadTryCatchRemover {
     }
 
     public static void cleanMethod(MethodNode method) {
+        repairSuppressedRethrowHandlers(method);
         if (method.tryCatchBlocks != null && !method.tryCatchBlocks.isEmpty()) {
             Iterator<TryCatchBlockNode> it = method.tryCatchBlocks.iterator();
             while (it.hasNext()) {
                 TryCatchBlockNode block = it.next();
+                if (isSharedContinuationHandler(method, block)) {
+                    it.remove();
+                    continue;
+                }
                 if (isMalwareCatch(method, block)) {
                     dropHandlerBlock(method, block);
                     it.remove();
@@ -44,6 +49,56 @@ public final class DeadTryCatchRemover {
             }
         }
         repairHandlerJumps(method);
+    }
+
+    private static void repairSuppressedRethrowHandlers(MethodNode method) {
+        if (method.tryCatchBlocks == null || method.tryCatchBlocks.isEmpty()) {
+            return;
+        }
+        for (TryCatchBlockNode block : method.tryCatchBlocks) {
+            if (block.handler != null) {
+                repairSuppressedRethrowHandler(method, block.handler);
+            }
+        }
+    }
+
+    private static boolean repairSuppressedRethrowHandler(MethodNode method, LabelNode handler) {
+        List<AbstractInsnNode> real = collectHandlerInsns(handler);
+        if (real.size() < 6) {
+            return false;
+        }
+        if (!(real.get(0) instanceof VarInsnNode caughtStore) || caughtStore.getOpcode() != Opcodes.ASTORE) {
+            return false;
+        }
+        if (!(real.get(1) instanceof VarInsnNode primaryLoad) || primaryLoad.getOpcode() != Opcodes.ALOAD) {
+            return false;
+        }
+        if (!(real.get(2) instanceof VarInsnNode caughtLoad) || caughtLoad.getOpcode() != Opcodes.ALOAD
+                || caughtLoad.var != caughtStore.var) {
+            return false;
+        }
+        if (!(real.get(3) instanceof MethodInsnNode addSuppressed)
+                || !"java/lang/Throwable".equals(addSuppressed.owner)
+                || !"addSuppressed".equals(addSuppressed.name)
+                || !"(Ljava/lang/Throwable;)V".equals(addSuppressed.desc)) {
+            return false;
+        }
+        if (!(real.get(4) instanceof VarInsnNode primaryRethrow) || primaryRethrow.getOpcode() != Opcodes.ALOAD
+                || primaryRethrow.var != primaryLoad.var) {
+            return false;
+        }
+        if (real.get(5).getOpcode() != Opcodes.ATHROW) {
+            return false;
+        }
+
+        InsnList replacement = new InsnList();
+        replacement.add(new VarInsnNode(Opcodes.ALOAD, caughtStore.var));
+        replacement.add(new InsnNode(Opcodes.ATHROW));
+        method.instructions.insert(caughtStore, replacement);
+        for (int i = 1; i <= 5; i++) {
+            method.instructions.remove(real.get(i));
+        }
+        return true;
     }
 
     public static void repairHandlerJumps(MethodNode method) {
@@ -104,16 +159,115 @@ public final class DeadTryCatchRemover {
         if (block.handler == null) {
             return true;
         }
+        if (isLegitimatePluginCatch(method, block)) {
+            return false;
+        }
         if (block.type == null) {
             if (isSyncCatch(method, block)) {
                 return false;
             }
             return shouldDrop(method, block);
         }
-        if (shouldDrop(method, block)) {
+        return shouldDrop(method, block);
+    }
+
+    private static boolean isLegitimatePluginCatch(MethodNode method, TryCatchBlockNode block) {
+        if (block.handler == null || block.type == null) {
+            return false;
+        }
+        if (!"java/io/IOException".equals(block.type)
+                && !"org/bukkit/configuration/InvalidConfigurationException".equals(block.type)) {
+            return false;
+        }
+        return handlerLogsThrowable(method, block.handler);
+    }
+
+    private static boolean handlerLogsThrowable(MethodNode method, LabelNode handler) {
+        final boolean[] found = {false};
+        forEachHandlerInsn(method, handler, insn -> {
+            if (insn instanceof MethodInsnNode min && isPluginLoggingCall(min)) {
+                found[0] = true;
+            }
+        });
+        return found[0];
+    }
+
+    private static boolean isPluginLoggingCall(MethodInsnNode min) {
+        if ("java/util/logging/Logger".equals(min.owner)
+                && "(Ljava/util/logging/Level;Ljava/lang/String;Ljava/lang/Throwable;)V".equals(min.desc)) {
             return true;
         }
+        if (!"(Ljava/lang/String;[Ljava/lang/Object;)V".equals(min.desc)) {
+            return false;
+        }
+        return switch (min.name) {
+            case "warning", "fine", "info", "severe", "log" -> true;
+            default -> min.owner.endsWith("/Logging") || min.owner.contains("/utils/CoreLogging");
+        };
+    }
+
+    private static void forEachHandlerInsn(MethodNode method, LabelNode handler, java.util.function.Consumer<AbstractInsnNode> action) {
+        boolean in = false;
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn == handler) {
+                in = true;
+                continue;
+            }
+            if (!in) {
+                continue;
+            }
+            if (insn instanceof LabelNode || insn instanceof LineNumberNode || insn instanceof FrameNode) {
+                continue;
+            }
+            action.accept(insn);
+            if (isHandlerEnd(insn.getOpcode())) {
+                break;
+            }
+        }
+    }
+
+    private static boolean isSharedContinuationHandler(MethodNode method, TryCatchBlockNode block) {
+        if (block == null || block.handler == null) {
+            return false;
+        }
+        if (!isNormalControlFlowTarget(method, block)) {
+            return false;
+        }
+        AbstractInsnNode first = firstRealInsn(block.handler);
+        if (first == null) {
+            return true;
+        }
+        int op = first.getOpcode();
+        return op != Opcodes.ASTORE
+                && op != Opcodes.POP
+                && op != Opcodes.POP2
+                && op != Opcodes.ATHROW;
+    }
+
+    private static boolean isNormalControlFlowTarget(MethodNode method, TryCatchBlockNode block) {
+        AbstractInsnNode handlerTarget = firstRealInsn(block.handler);
+        if (handlerTarget == null) {
+            return true;
+        }
+        if (block.end != null && firstRealInsn(block.end) == handlerTarget) {
+            return true;
+        }
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (insn instanceof JumpInsnNode jump && firstRealInsn(jump.label) == handlerTarget) {
+                return true;
+            }
+        }
         return false;
+    }
+
+    private static AbstractInsnNode firstRealInsn(AbstractInsnNode start) {
+        for (AbstractInsnNode insn = start; insn != null; insn = insn.getNext()) {
+            if (insn instanceof LabelNode || insn instanceof LineNumberNode || insn instanceof FrameNode) {
+                continue;
+            }
+            return insn;
+        }
+        return null;
     }
 
     public static void dropHandlerBlock(MethodNode method, TryCatchBlockNode block) {
@@ -150,7 +304,59 @@ public final class DeadTryCatchRemover {
         if (block.handler == null) {
             return true;
         }
+        if (isProtectedObfuscationCatch(method, block)) {
+            return false;
+        }
         return isRethrowStub(block.handler) || isSwallowStub(block.handler);
+    }
+
+    private static boolean isProtectedObfuscationCatch(MethodNode method, TryCatchBlockNode block) {
+        if (block.handler == null) {
+            return false;
+        }
+        List<AbstractInsnNode> real = collectHandlerInsns(block.handler);
+        if (real.size() != 2) {
+            return false;
+        }
+        if (!(real.get(0) instanceof VarInsnNode store) || store.getOpcode() != Opcodes.ASTORE) {
+            return false;
+        }
+        if (!isReturnOpcode(real.get(1).getOpcode())) {
+            return false;
+        }
+        AbstractInsnNode exitInsn = real.get(1);
+        for (AbstractInsnNode insn : method.instructions.toArray()) {
+            if (!(insn instanceof JumpInsnNode jump) || jump.label == null) {
+                continue;
+            }
+            if (firstRealInsn(jump.label) != exitInsn) {
+                continue;
+            }
+            if (block.start != null && isInsnBefore(insn, block.start)) {
+                return true;
+            }
+            if (block.end != null && firstRealInsn(block.end) == exitInsn) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isInsnBefore(AbstractInsnNode left, AbstractInsnNode right) {
+        boolean seenLeft = false;
+        AbstractInsnNode start = left;
+        while (start.getPrevious() != null) {
+            start = start.getPrevious();
+        }
+        for (AbstractInsnNode insn = start; insn != null; insn = insn.getNext()) {
+            if (insn == right) {
+                return seenLeft;
+            }
+            if (insn == left) {
+                seenLeft = true;
+            }
+        }
+        return false;
     }
 
     private static boolean isRethrowStub(LabelNode handler) {
@@ -198,6 +404,9 @@ public final class DeadTryCatchRemover {
             if ((first == Opcodes.POP || first == Opcodes.POP2) && isReturnOpcode(second)) {
                 return true;
             }
+            if (first == Opcodes.ASTORE && isReturnOpcode(second)) {
+                return true;
+            }
         }
         return false;
     }
@@ -234,9 +443,13 @@ public final class DeadTryCatchRemover {
             if (op == Opcodes.GOTO) {
                 hasGoto = true;
             }
-            if (insn instanceof MethodInsnNode min
-                    && ("printStackTrace".equals(min.name) || "getStackTrace".equals(min.name))) {
-                return false;
+            if (insn instanceof MethodInsnNode min) {
+                if ("printStackTrace".equals(min.name) || "getStackTrace".equals(min.name)) {
+                    return false;
+                }
+                if (isPluginLoggingCall(min)) {
+                    return false;
+                }
             }
         }
         if (!hasGoto || hasAthrow) {

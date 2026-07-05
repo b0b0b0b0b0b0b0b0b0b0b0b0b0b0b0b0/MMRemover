@@ -113,10 +113,8 @@ public final class JarClassWriter {
         try {
             ClassNode working = cloneClass(cn);
             finalizeAllMethods(working);
-            FrameRecomputer.recompute(working, jarClasses);
-            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-            working.accept(cw);
-            return cw.toByteArray();
+            stripAllFrames(working);
+            return emitComputed(cr, working, jarClasses);
         } catch (Throwable primary) {
             try {
                 return writeLenient(cr, cn, jarClasses);
@@ -138,10 +136,8 @@ public final class JarClassWriter {
         ClassNode working = cloneClass(cn);
         finalizeAllMethods(working);
         try {
-            FrameRecomputer.recompute(working, jarClasses);
-            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-            working.accept(cw);
-            return cw.toByteArray();
+            stripAllFrames(working);
+            return emitComputed(cr, working, jarClasses);
         } catch (Throwable ignored) {
             return emitComputed(cr, working, jarClasses);
         }
@@ -173,9 +169,6 @@ public final class JarClassWriter {
     }
 
     private static void finalizeMethodForFrameRecompute(String owner, MethodNode method) {
-        if (CatchHandlerLocalFixer.needsFix(method, 800)) {
-            CatchHandlerLocalFixer.fix(method);
-        }
         TryCatchBlockDeduplicator.dedupe(method);
         DeadTryCatchRemover.cleanMethod(method);
         TryCatchBlockPruner.prune(method);

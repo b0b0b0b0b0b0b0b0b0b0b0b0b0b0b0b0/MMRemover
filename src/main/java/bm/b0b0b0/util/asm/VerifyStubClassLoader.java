@@ -143,6 +143,10 @@ public final class VerifyStubClassLoader extends ClassLoader {
             return new StubShape(Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "java/lang/Object", null);
         }
 
+        static StubShape exception() {
+            return new StubShape(Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, "java/lang/Exception", null);
+        }
+
         static StubShape iface() {
             return new StubShape(Opcodes.ACC_PUBLIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE, "java/lang/Object", null);
         }
@@ -166,6 +170,7 @@ public final class VerifyStubClassLoader extends ClassLoader {
             Map.entry("org/bukkit/command/PluginCommand", StubShape.object()),
             Map.entry("org/bukkit/entity/Player", StubShape.iface()),
             Map.entry("org/bukkit/configuration/file/FileConfiguration", StubShape.object()),
-            Map.entry("org/bukkit/configuration/Configuration", StubShape.iface())
+            Map.entry("org/bukkit/configuration/Configuration", StubShape.iface()),
+            Map.entry("org/bukkit/configuration/InvalidConfigurationException", StubShape.exception())
     );
 }

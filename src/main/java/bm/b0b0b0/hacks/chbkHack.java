@@ -2,7 +2,6 @@ package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.asm.CaseInsensitiveClassRefFixer;
-import bm.b0b0b0.util.asm.CatchHandlerLocalFixer;
 import bm.b0b0b0.util.asm.DeadTryCatchRemover;
 import bm.b0b0b0.util.asm.JarClassWriter;
 import bm.b0b0b0.util.asm.OrphanPopRemover;
@@ -393,15 +392,6 @@ public class chbkHack {
             }
         }
 
-        if (hasRefs && changed) {
-            for (MethodNode m : cn.methods) {
-                String key = m.name + m.desc;
-                if (!touchedMethods.contains(key) && CatchHandlerLocalFixer.needsFix(m, 800)) {
-                    touchedMethods.add(key);
-                }
-            }
-        }
-
         if (!changed) {
             return clazz;
         }
@@ -549,7 +539,7 @@ public class chbkHack {
     }
 
     private static boolean shouldStripChamborMethod(MethodNode m, boolean classInfected, boolean methodChanged) {
-        if (methodReferencesMutableUtilities(m) || isSystemMetricsMethod(m)) {
+        if (isSystemMetricsMethod(m)) {
             return true;
         }
         if (!classInfected || m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
