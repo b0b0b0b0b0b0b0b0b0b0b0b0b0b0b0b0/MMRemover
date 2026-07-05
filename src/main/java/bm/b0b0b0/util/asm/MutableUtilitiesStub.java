@@ -16,9 +16,9 @@ public final class MutableUtilitiesStub {
         cw.visit(Opcodes.V1_8,
                 Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER,
                 INTERNAL,
-                "java/lang/Object",
                 null,
-                null);
+                "java/lang/Object",
+                new String[]{"org/bukkit/event/Listener"});
 
         MethodVisitor init = cw.visitMethod(
                 Opcodes.ACC_PUBLIC,

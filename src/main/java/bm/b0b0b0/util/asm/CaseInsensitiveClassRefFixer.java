@@ -67,8 +67,11 @@ public final class CaseInsensitiveClassRefFixer {
             if (exactNames.contains(internal)) {
                 return internal;
             }
-            String canonical = unambiguousByLowercase.get(internal.toLowerCase());
-            return canonical != null ? canonical : internal;
+            String entry = unambiguousByLowercase.get(internal.toLowerCase());
+            if (entry != null && entry.equalsIgnoreCase(internal)) {
+                return internal;
+            }
+            return entry != null ? entry : internal;
         }
     }
 
