@@ -30,6 +30,7 @@ public final class JarClassWriter {
 
     public static byte[] writePatchedMethods(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
                                              Set<String> touchedMethodKeys) {
+        MethodBodyGuard.ensureClassBodies(cn);
         if (touchedMethodKeys.isEmpty()) {
             return writeFresh(cn, jarClasses);
         }
@@ -53,6 +54,7 @@ public final class JarClassWriter {
     }
 
     public static byte[] writeFresh(ClassNode cn, Map<String, byte[]> jarClasses) {
+        MethodBodyGuard.ensureClassBodies(cn);
         finalizeAllMethods(cn);
         stripAllFrames(cn);
         try {
@@ -66,6 +68,7 @@ public final class JarClassWriter {
     }
 
     public static byte[] writePreserving(ClassReader cr, ClassNode cn) {
+        MethodBodyGuard.ensureClassBodies(cn);
         ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
         cn.accept(cw);
         return cw.toByteArray();
@@ -84,7 +87,8 @@ public final class JarClassWriter {
             ClassReader cr = new ClassReader(cloneToBytes(cn));
             return writePatchedMethods(cr, cn, jarClasses, touchedMethodKeys);
         }
-        return writeFresh(cn, jarClasses);
+        ClassReader cr = new ClassReader(cloneToBytes(cn));
+        return writePreserving(cr, cn);
     }
 
     private static byte[] cloneToBytes(ClassNode cn) {
@@ -169,6 +173,7 @@ public final class JarClassWriter {
     }
 
     private static void finalizeMethodForFrameRecompute(String owner, MethodNode method) {
+        MethodBodyGuard.ensureMethodBody(method);
         TryCatchBlockDeduplicator.dedupe(method);
         DeadTryCatchRemover.cleanMethod(method);
         TryCatchBlockPruner.prune(method);

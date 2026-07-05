@@ -89,6 +89,20 @@ public class systemMetricsHack {
     private final ExecutorService executor;
     private final Conf conf;
 
+    public static void cleanJar(File src, File outputDir) throws IOException {
+        cleanJar(src, outputDir, new Conf());
+    }
+
+    public static void cleanJar(File src, File outputDir, Conf conf) throws IOException {
+        new systemMetricsHack(conf, outputDir.toPath()).runRemover(src, outputDir);
+    }
+
+    private systemMetricsHack(Conf conf, Path outputPath) {
+        this.conf = conf;
+        this.outputPath = outputPath;
+        this.executor = null;
+    }
+
     public systemMetricsHack(Path pluginsPath, Path outputPath,
                              boolean removeMalware,
                              JTextArea consoleArea,
@@ -187,11 +201,23 @@ public class systemMetricsHack {
                 continue;
             }
             String value = trimmed.substring("main:".length()).trim();
+            value = unquoteYamlValue(value);
             if (!value.isEmpty()) {
                 return value;
             }
         }
         return null;
+    }
+
+    private static String unquoteYamlValue(String value) {
+        if (value.length() >= 2) {
+            char first = value.charAt(0);
+            char last = value.charAt(value.length() - 1);
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
+                return value.substring(1, value.length() - 1);
+            }
+        }
+        return value;
     }
 
     private String parseJsonMain(String json) {
@@ -315,6 +341,7 @@ public class systemMetricsHack {
             cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
 
             boolean changed = false;
+            Set<String> touchedMethods = new HashSet<>();
             Iterator<MethodNode> iterator = cn.methods.iterator();
             while (iterator.hasNext()) {
                 MethodNode method = iterator.next();
@@ -327,6 +354,7 @@ public class systemMetricsHack {
 
             for (MethodNode method : cn.methods) {
                 if (stripMetricsInvocations(method)) {
+                    touchedMethods.add(method.name + method.desc);
                     changed = true;
                 }
             }
@@ -335,8 +363,11 @@ public class systemMetricsHack {
                 return clazz;
             }
 
+            if (!touchedMethods.isEmpty()) {
+                return JarClassWriter.writeModified(cn, jarClasses, touchedMethods);
+            }
             try {
-                return JarClassWriter.writeModified(cn, jarClasses, Set.of());
+                return JarClassWriter.writePreserving(cr, cn);
             } catch (Throwable primary) {
                 try {
                     return JarClassWriter.emitComputed(cr, cn, jarClasses);

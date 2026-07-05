@@ -145,7 +145,7 @@ public final class CleanPipeline {
             if (!riskyFrames && structuralSize(cn) == before) {
                 return data;
             }
-            return JarClassWriter.writeModified(cn, jarClasses);
+            return JarClassWriter.writeFresh(cn, jarClasses);
         } catch (Throwable ignored) {
             return data;
         }

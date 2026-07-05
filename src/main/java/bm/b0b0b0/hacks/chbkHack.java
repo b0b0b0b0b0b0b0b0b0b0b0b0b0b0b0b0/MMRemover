@@ -332,6 +332,20 @@ public class chbkHack {
             byte[] fixed = CaseInsensitiveClassRefFixer.fix(entry.data(), caseContext, jarClassesForCaseFix);
             finalized.add(new JarEntryUtils.Entry(entry.name(), false, fixed));
         }
+        for (int i = 0; i < finalized.size(); i++) {
+            JarEntryUtils.Entry entry = finalized.get(i);
+            if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
+                continue;
+            }
+            String internal = entry.name().substring(0, entry.name().length() - 6);
+            if (!caseContext.widenTargets().contains(internal)) {
+                continue;
+            }
+            byte[] widened = CaseInsensitiveClassRefFixer.widenPublic(entry.data());
+            if (widened != entry.data()) {
+                finalized.set(i, new JarEntryUtils.Entry(entry.name(), false, widened));
+            }
+        }
         filtered = finalized;
         double bytecodeSec = (System.nanoTime() - bytecodePhaseStart) / 1_000_000_000.0;
         b0b0b0Dick.log(String.format(conf.getTranslation("jarBytecodeDone"), bytecodeSec));
@@ -378,15 +392,73 @@ public class chbkHack {
 
     private static boolean mustPatchClass(byte[] clazz) {
         if (clazz == null || clazz.length == 0 || !containsMutableUtilitiesString(clazz)) {
-            return false;
+            if (clazz == null || clazz.length == 0) {
+                return false;
+            }
+            String s = new String(clazz, StandardCharsets.ISO_8859_1);
+            if (!s.contains(METRICS_METHOD_NAME)) {
+                return false;
+            }
         }
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
             cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
-            return referencesMutableUtilities(cn);
+            return referencesMutableUtilities(cn) || referencesSystemMetrics(cn);
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    private static boolean referencesSystemMetrics(ClassNode cn) {
+        for (MethodNode m : cn.methods) {
+            if (isSystemMetricsMethod(m)) {
+                return true;
+            }
+            for (AbstractInsnNode ins : m.instructions) {
+                if (ins instanceof MethodInsnNode min
+                        && METRICS_METHOD_NAME.equals(min.name)
+                        && METRICS_METHOD_DESC.equals(min.desc)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static final String METRICS_METHOD_NAME = "SystemMetrics";
+    private static final String METRICS_METHOD_DESC = "(Lorg/bukkit/plugin/java/JavaPlugin;)V";
+
+    private static boolean stripSystemMetricsInvocations(MethodNode m) {
+        List<AbstractInsnNode> trash = new ArrayList<>();
+        for (AbstractInsnNode insn = m.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (!(insn instanceof MethodInsnNode min)) {
+                continue;
+            }
+            if (!METRICS_METHOD_NAME.equals(min.name) || !METRICS_METHOD_DESC.equals(min.desc)) {
+                continue;
+            }
+            trash.add(insn);
+            int argCount = Type.getArgumentTypes(min.desc).length;
+            if (min.getOpcode() != Opcodes.INVOKESTATIC) {
+                argCount++;
+            }
+            collectStackLoads(trash, insn.getPrevious(), argCount);
+        }
+        if (trash.isEmpty()) {
+            return false;
+        }
+        trash.forEach(m.instructions::remove);
+        return true;
+    }
+
+    private static void collectStackLoads(List<AbstractInsnNode> trash, AbstractInsnNode start, int count) {
+        AbstractInsnNode cur = start;
+        int collected = 0;
+        while (cur != null && collected < count) {
+            trash.add(cur);
+            collected++;
+            cur = cur.getPrevious();
         }
     }
 
@@ -398,8 +470,19 @@ public class chbkHack {
         boolean hasRefs = referencesMutableUtilities(cn);
         boolean changed = false;
         Set<String> touchedMethods = new HashSet<>();
-        for (MethodNode m : cn.methods) {
+        Iterator<MethodNode> methodIterator = cn.methods.iterator();
+        while (methodIterator.hasNext()) {
+            MethodNode m = methodIterator.next();
+            if (isSystemMetricsMethod(m)) {
+                methodIterator.remove();
+                changed = true;
+                continue;
+            }
             boolean methodChanged = false;
+            if (stripSystemMetricsInvocations(m)) {
+                changed = true;
+                methodChanged = true;
+            }
             if (hasRefs) {
                 while (stripCalls(m)) {
                     changed = true;
@@ -443,9 +526,13 @@ public class chbkHack {
                 try {
                     return JarClassWriter.emitComputed(cr, cn, jarClasses);
                 } catch (Throwable tertiary) {
-                    b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"),
-                            cn.name + ".class", skipReason(tertiary)));
-                    return fallback;
+                    try {
+                        return JarClassWriter.writePreserving(cr, cn);
+                    } catch (Throwable preserving) {
+                        b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"),
+                                cn.name + ".class", skipReason(preserving)));
+                        return fallback;
+                    }
                 }
             }
         }
@@ -576,7 +663,7 @@ public class chbkHack {
         if (isSystemMetricsMethod(m)) {
             return true;
         }
-        if (!classInfected || m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
+        if (!classInfected || !methodReferencesMutableUtilities(m) || m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
             return false;
         }
         boolean hasDroppableCatch = false;

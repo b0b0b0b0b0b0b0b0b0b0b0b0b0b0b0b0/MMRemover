@@ -1,7 +1,9 @@
 package bm.b0b0b0.util.asm;
 
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
@@ -27,6 +29,7 @@ public final class CaseInsensitiveClassRefFixer {
     public static final class Context {
         private final Set<String> exactNames;
         private final Map<String, String> unambiguousByLowercase;
+        private final Set<String> widenTargets = new HashSet<>();
 
         private Context(Set<String> exactNames, Map<String, String> unambiguousByLowercase) {
             this.exactNames = exactNames;
@@ -60,6 +63,10 @@ public final class CaseInsensitiveClassRefFixer {
             return unambiguousByLowercase.isEmpty();
         }
 
+        public Set<String> widenTargets() {
+            return widenTargets;
+        }
+
         private String resolve(String internal) {
             if (internal == null || internal.isEmpty()) {
                 return internal;
@@ -68,8 +75,9 @@ public final class CaseInsensitiveClassRefFixer {
                 return internal;
             }
             String entry = unambiguousByLowercase.get(internal.toLowerCase());
-            if (entry != null && entry.equalsIgnoreCase(internal)) {
-                return internal;
+            if (entry != null && !entry.equals(internal)) {
+                widenTargets.add(entry);
+                return entry;
             }
             return entry != null ? entry : internal;
         }
@@ -87,14 +95,30 @@ public final class CaseInsensitiveClassRefFixer {
             return clazz;
         }
         try {
-            return JarClassWriter.writeModified(cn, jarClasses, Set.of());
+            return JarClassWriter.emitComputed(cr, cn, jarClasses);
         } catch (Throwable primary) {
             try {
-                return JarClassWriter.emitComputed(cr, cn, jarClasses);
+                return JarClassWriter.writePreserving(cr, cn);
             } catch (Throwable secondary) {
                 return clazz;
             }
         }
+    }
+
+    public static byte[] widenPublic(byte[] clazz) {
+        if (clazz == null || clazz.length == 0) {
+            return clazz;
+        }
+        ClassReader cr = new ClassReader(clazz);
+        ClassNode cn = new ClassNode();
+        cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+        if ((cn.access & Opcodes.ACC_PUBLIC) != 0) {
+            return clazz;
+        }
+        cn.access |= Opcodes.ACC_PUBLIC;
+        ClassWriter cw = new ClassWriter(cr, 0);
+        cn.accept(cw);
+        return cw.toByteArray();
     }
 
     public static boolean fix(ClassNode cn, Context context) {
