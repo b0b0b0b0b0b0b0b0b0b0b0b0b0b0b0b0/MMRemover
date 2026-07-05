@@ -60,8 +60,8 @@ public class MainWindow extends JFrame {
     private void initializeUI() {
 
         setTitle("MMRemover (v" + AppVersion.CURRENT + ")");
-        setSize(800, 600);
-        setMinimumSize(new Dimension(600, 400));
+        setSize(960, 600);
+        setMinimumSize(new Dimension(920, 420));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 

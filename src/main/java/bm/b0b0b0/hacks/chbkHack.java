@@ -11,7 +11,6 @@ import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
@@ -241,15 +240,16 @@ public class chbkHack {
         if (removedPayload > 0) {
             b0b0b0Dick.log(String.format(conf.getTranslation("jarPayloadRemoved"), removedPayload));
         }
-        Map<String, String> caseCanonical = CaseInsensitiveClassRefFixer.canonicalNames(
+        CaseInsensitiveClassRefFixer.Context caseContext = CaseInsensitiveClassRefFixer.Context.of(
                 filtered.stream().filter(e -> !e.isDirectory() && e.name().endsWith(".class")).map(JarEntryUtils.Entry::name).toList());
+        Map<String, byte[]> jarClassesForCaseFix = JarClassWriter.indexClasses(filtered);
         List<JarEntryUtils.Entry> finalized = new ArrayList<>(filtered.size());
         for (JarEntryUtils.Entry entry : filtered) {
             if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
                 finalized.add(entry);
                 continue;
             }
-            byte[] fixed = CaseInsensitiveClassRefFixer.fix(entry.data(), caseCanonical);
+            byte[] fixed = CaseInsensitiveClassRefFixer.fix(entry.data(), caseContext, jarClassesForCaseFix);
             finalized.add(new JarEntryUtils.Entry(entry.name(), false, fixed));
         }
         filtered = finalized;
@@ -370,22 +370,11 @@ public class chbkHack {
                 return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods);
             } catch (Throwable secondary) {
                 try {
-                    JarClassWriter.finalizeTouchedMethods(cn, touchedMethods);
-                    return JarClassWriter.writeFresh(cn, jarClasses);
-                } catch (Throwable fresh) {
-                    try {
-                        return JarClassWriter.writeMinimal(cr, cn);
-                    } catch (Throwable minimal) {
-                        try {
-                            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-                            cn.accept(cw);
-                            return cw.toByteArray();
-                        } catch (Throwable bare) {
-                            b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"),
-                                    cn.name + ".class", skipReason(bare)));
-                            return fallback;
-                        }
-                    }
+                    return JarClassWriter.emitComputed(cr, cn, jarClasses);
+                } catch (Throwable tertiary) {
+                    b0b0b0Dick.log(String.format(conf.getTranslation("skipClassWarning"),
+                            cn.name + ".class", skipReason(tertiary)));
+                    return fallback;
                 }
             }
         }

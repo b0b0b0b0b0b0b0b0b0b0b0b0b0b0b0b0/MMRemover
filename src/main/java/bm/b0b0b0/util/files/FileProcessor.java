@@ -11,7 +11,7 @@ public class FileProcessor {
 
     private static final String[] ALL_TYPES = {
             "hostflow", "artemka", "bstatsjar", "pluginmetrics", "aph",
-            "chbkHack", "ruBstatsHack", "systemMetricsHack"
+            "ruBstatsHack", "systemMetricsHack", "chbkHack"
     };
 
     public static void processAllFiles(Path inputPath, Path outputPath, JTextArea consoleArea, Conf conf) {

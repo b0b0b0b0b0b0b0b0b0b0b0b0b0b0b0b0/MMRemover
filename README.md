@@ -176,7 +176,7 @@ User-Agent на C2: `Java/forchhh-core`. Ключ шифрования payload: 
 
 | Файл | Где скачать | Зачем |
 |------|-------------|--------|
-| **`MMRemover-1.28.jar`** | [black-minecraft.com/resources/6091](https://black-minecraft.com/resources/6091/) | Сама программа |
+| **`MMRemover-1.xx.jar`** | [black-minecraft.com/resources/6091](https://black-minecraft.com/resources/6091/) | Сама программа (xx — номер версии с сайта) |
 | **`start.bat`** | [**скачать запускатор**](https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.bat) | Проверяет Java и открывает MMRemover |
 
 **Запускатор обязателен.** Jar без `start.bat` — половина дела. Ссылка на bat:  
@@ -192,7 +192,7 @@ https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.ba
 ```
 Рабочий стол
   └── MMRemover
-        MMRemover-1.28.jar
+        MMRemover-1.xx.jar
         start.bat
 ```
 

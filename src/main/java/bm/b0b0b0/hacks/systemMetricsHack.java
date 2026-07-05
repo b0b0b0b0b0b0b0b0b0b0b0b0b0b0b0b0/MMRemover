@@ -1,11 +1,11 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.asm.JarClassWriter;
 import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -236,6 +236,7 @@ public class systemMetricsHack {
         }
 
         List<JarEntryUtils.Entry> all = JarEntryUtils.readDeduped(src);
+        Map<String, byte[]> jarClasses = JarClassWriter.indexClasses(all);
         int hollowClassCount = 0;
         for (JarEntryUtils.Entry entry : all) {
             if (!entry.isDirectory() && entry.name().endsWith(".class")
@@ -253,7 +254,7 @@ public class systemMetricsHack {
                 continue;
             }
             if (!entry.isDirectory() && entriesToClean.contains(entry.name()) && entry.data() != null) {
-                byte[] stripped = stripSystemMetrics(entry.data());
+                byte[] stripped = stripSystemMetrics(entry.data(), jarClasses);
                 cleaned.add(new JarEntryUtils.Entry(entry.name(), false, stripped));
             } else {
                 cleaned.add(entry);
@@ -271,7 +272,7 @@ public class systemMetricsHack {
         }
     }
 
-    private byte[] stripSystemMetrics(byte[] clazz) {
+    private byte[] stripSystemMetrics(byte[] clazz, Map<String, byte[]> jarClasses) {
         try {
             ClassReader cr = new ClassReader(clazz);
             ClassNode cn = new ClassNode();
@@ -298,9 +299,15 @@ public class systemMetricsHack {
                 return clazz;
             }
 
-            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-            cn.accept(cw);
-            return cw.toByteArray();
+            try {
+                return JarClassWriter.writeModified(cn, jarClasses, Set.of());
+            } catch (Throwable primary) {
+                try {
+                    return JarClassWriter.emitComputed(cr, cn, jarClasses);
+                } catch (Throwable secondary) {
+                    return clazz;
+                }
+            }
         } catch (Throwable ignored) {
             return clazz;
         }

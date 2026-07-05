@@ -6,7 +6,7 @@
 
     <groupId>bm.b0b0b0</groupId>
     <artifactId>MMRemover</artifactId>
-    <version>1.28</version>
+    <version>1.29</version>
 
     <properties>
         <maven.compiler.source>25</maven.compiler.source>
