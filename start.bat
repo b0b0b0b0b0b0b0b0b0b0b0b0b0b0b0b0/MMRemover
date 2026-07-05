@@ -1,41 +1,42 @@
 @echo off
+setlocal EnableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 
-where java >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo [ОШИБКА] Java не найдена.
-    echo.
-    echo Установите JDK 25 с сайта Adoptium:
-    echo   https://adoptium.net/temurin/releases/?version=25
-    echo.
-    echo При установке поставьте галочку "Set JAVA_HOME" / "Add to PATH".
-    echo После установки закройте это окно, откройте заново и запустите start.bat снова.
-    echo.
-    pause
-    exit /b 1
+set "JAVAW="
+for /d %%d in (
+    "C:\Program Files\Eclipse Adoptium\jdk-25*"
+    "C:\Program Files\Java\jdk-25*"
+    "C:\Program Files\Microsoft\jdk-25*"
+) do (
+    if exist "%%d\bin\javaw.exe" (
+        set "JAVAW=%%d\bin\javaw.exe"
+        goto :java_ok
+    )
 )
 
+echo.
+echo [ОШИБКА] Java 25 не найдена. MMRemover 2.0 без неё не запустится.
+echo   https://adoptium.net/temurin/releases/?version=25
+echo.
+pause
+exit /b 1
+
+:java_ok
 set "JAR="
 for /f "delims=" %%f in ('dir /b /o-d "MMRemover*.jar" 2^>nul') do (
     set "JAR=%%f"
     goto :run
 )
-for /f "delims=" %%f in ('dir /b /o-d "target\MMRemover*.jar" 2^>nul') do (
-    set "JAR=target\%%f"
-    goto :run
-)
 
 echo.
-echo [ОШИБКА] Файл MMRemover-*.jar не найден в этой папке.
-echo Положите jar в ту же папку, где лежит start.bat
-echo (обычно MMRemover на рабочем столе — рядом с start.bat).
+echo [ОШИБКА] MMRemover-*.jar не найден в этой папке.
+echo Положите jar рядом со start.bat.
 echo.
 pause
 exit /b 1
 
 :run
-echo Запуск %JAR% ...
-start "" javaw -jar "%JAR%"
-exit /b 0
+echo Start %JAR%...
+start "" "%JAVAW%" -jar "%JAR%"
+pause
