@@ -31,29 +31,14 @@ public final class JarClassWriter {
     public static byte[] writePatchedMethods(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
                                              Set<String> touchedMethodKeys) {
         if (touchedMethodKeys.isEmpty()) {
-            return writePreserving(cr, cn);
+            return writeFresh(cn, jarClasses);
         }
-        for (MethodNode method : cn.methods) {
-            if (!touchedMethodKeys.contains(method.name + method.desc)) {
-                continue;
-            }
-            TryCatchBlockPruner.prune(method);
-            BytecodeSanitizer.sanitizeChangedMethod(cn.name, method);
-            while (OrphanPopRemover.cleanMethod(cn.name, method)) {
-                TryCatchBlockPruner.prune(method);
-            }
-            TryCatchBlockDeduplicator.dedupe(method);
-            TryCatchBlockPruner.prune(method);
-            FrameRecomputer.stripFrames(method);
-            method.localVariables = null;
-        }
-        TryCatchBlockPruner.prune(cn);
+        finalizeTouchedMethods(cn, touchedMethodKeys);
         stripAllFrames(cn);
         try {
             return emitComputedFrames(cn, jarClasses);
         } catch (Throwable primary) {
-            finalizeTouchedMethods(cn, touchedMethodKeys);
-            return writeFresh(cn, jarClasses);
+            return emitComputed(cloneToReader(cn), cn, jarClasses);
         }
     }
 
@@ -62,35 +47,21 @@ public final class JarClassWriter {
             if (!touchedMethodKeys.contains(method.name + method.desc)) {
                 continue;
             }
-            if (CatchHandlerLocalFixer.needsFix(method, 800)) {
-                CatchHandlerLocalFixer.fix(method);
-            }
-            TryCatchBlockDeduplicator.dedupe(method);
-            TryCatchBlockPruner.prune(method);
-            while (OrphanPopRemover.cleanMethod(cn.name, method)) {
-                TryCatchBlockPruner.prune(method);
-            }
-            FrameRecomputer.stripFrames(method);
-            method.localVariables = null;
+            finalizeMethodForFrameRecompute(cn.name, method);
         }
         TryCatchBlockPruner.prune(cn);
     }
 
     public static byte[] writeFresh(ClassNode cn, Map<String, byte[]> jarClasses) {
-        TryCatchBlockPruner.prune(cn);
+        finalizeAllMethods(cn);
         stripAllFrames(cn);
         try {
             return emitComputedFrames(cn, jarClasses);
         } catch (Throwable primary) {
-            try {
-                FrameRecomputer.recompute(cn, jarClasses);
-                return emitPrecomputedFrames(cn, jarClasses);
-            } catch (Throwable secondary) {
-                ClassWriter cw = new JarAwareClassWriter(
-                        ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
-                cn.accept(cw);
-                return cw.toByteArray();
-            }
+            ClassWriter cw = new JarAwareClassWriter(
+                    ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+            cn.accept(cw);
+            return cw.toByteArray();
         }
     }
 
@@ -108,42 +79,22 @@ public final class JarClassWriter {
         return writeModified(cn, jarClasses, null);
     }
 
-    private static final int CATCH_FIX_MAX_INSNS = 800;
-
     public static byte[] writeModified(ClassNode cn, Map<String, byte[]> jarClasses, Set<String> touchedMethodKeys) {
-        ClassNode working = cloneClass(cn);
-        TryCatchBlockPruner.prune(working);
-        TryCatchBlockDeduplicator.dedupe(working);
-        TryCatchBlockPruner.prune(working);
         if (touchedMethodKeys != null && !touchedMethodKeys.isEmpty()) {
-            for (MethodNode method : working.methods) {
-                if (!touchedMethodKeys.contains(method.name + method.desc)) {
-                    continue;
-                }
-                if (CatchHandlerLocalFixer.needsFix(method, CATCH_FIX_MAX_INSNS)) {
-                    CatchHandlerLocalFixer.fix(method);
-                }
-            }
+            ClassReader cr = new ClassReader(cloneToBytes(cn));
+            return writePatchedMethods(cr, cn, jarClasses, touchedMethodKeys);
         }
-        stripAllFrames(working);
-        try {
-            return emitComputedFrames(working, jarClasses);
-        } catch (Throwable primary) {
-            TryCatchBlockPruner.prune(working);
-            stripAllFrames(working);
-            try {
-                return emitComputedFrames(working, jarClasses);
-            } catch (Throwable secondary) {
-                FrameRecomputer.recompute(working, jarClasses);
-                return emitPrecomputedFrames(working, jarClasses);
-            }
-        }
+        return writeFresh(cn, jarClasses);
     }
 
-    private static byte[] emitPrecomputedFrames(ClassNode cn, Map<String, byte[]> jarClasses) {
-        ClassWriter cw = new JarAwareClassWriter(ClassWriter.COMPUTE_MAXS, jarClasses);
+    private static byte[] cloneToBytes(ClassNode cn) {
+        ClassWriter cw = new ClassWriter(0);
         cn.accept(cw);
         return cw.toByteArray();
+    }
+
+    private static ClassReader cloneToReader(ClassNode cn) {
+        return new ClassReader(cloneToBytes(cn));
     }
 
     private static byte[] emitComputedFrames(ClassNode cn, Map<String, byte[]> jarClasses) {
@@ -161,8 +112,7 @@ public final class JarClassWriter {
     public static byte[] write(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
         try {
             ClassNode working = cloneClass(cn);
-            BytecodeSanitizer.sanitize(working);
-            TryCatchBlockPruner.prune(working);
+            finalizeAllMethods(working);
             FrameRecomputer.recompute(working, jarClasses);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
             working.accept(cw);
@@ -178,9 +128,7 @@ public final class JarClassWriter {
 
     public static byte[] writeMinimal(ClassReader cr, ClassNode cn) {
         ClassNode working = cloneClass(cn);
-        TryCatchBlockPruner.prune(working);
-        OrphanPopRemover.clean(working);
-        TryCatchBlockPruner.prune(working);
+        finalizeAllMethods(working);
         ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
         working.accept(cw);
         return cw.toByteArray();
@@ -188,8 +136,7 @@ public final class JarClassWriter {
 
     public static byte[] writeLenient(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
         ClassNode working = cloneClass(cn);
-        TryCatchBlockDeduplicator.dedupe(working);
-        TryCatchBlockPruner.prune(working);
+        finalizeAllMethods(working);
         try {
             FrameRecomputer.recompute(working, jarClasses);
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
@@ -202,8 +149,7 @@ public final class JarClassWriter {
 
     public static byte[] writeComputed(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses) {
         ClassNode working = cloneClass(cn);
-        BytecodeSanitizer.sanitize(working);
-        TryCatchBlockPruner.prune(working);
+        finalizeAllMethods(working);
         return emitComputed(cr, working, jarClasses);
     }
 
@@ -213,17 +159,31 @@ public final class JarClassWriter {
             cn.accept(cw);
             return cw.toByteArray();
         } catch (Throwable ignored) {
-            try {
-                FrameRecomputer.recompute(cn, jarClasses);
-                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-                cn.accept(cw);
-                return cw.toByteArray();
-            } catch (Throwable ignored2) {
-                ClassWriter cw = new JarAwareClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
-                cn.accept(cw);
-                return cw.toByteArray();
-            }
+            ClassWriter cw = new JarAwareClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS, jarClasses);
+            cn.accept(cw);
+            return cw.toByteArray();
         }
+    }
+
+    private static void finalizeAllMethods(ClassNode cn) {
+        for (MethodNode method : cn.methods) {
+            finalizeMethodForFrameRecompute(cn.name, method);
+        }
+        TryCatchBlockPruner.prune(cn);
+    }
+
+    private static void finalizeMethodForFrameRecompute(String owner, MethodNode method) {
+        if (CatchHandlerLocalFixer.needsFix(method, 800)) {
+            CatchHandlerLocalFixer.fix(method);
+        }
+        TryCatchBlockDeduplicator.dedupe(method);
+        DeadTryCatchRemover.cleanMethod(method);
+        TryCatchBlockPruner.prune(method);
+        OrphanPopRemover.cleanMethod(owner, method);
+        DeadTryCatchRemover.repairHandlerJumps(method);
+        TryCatchBlockPruner.prune(method);
+        FrameRecomputer.stripFrames(method);
+        method.localVariables = null;
     }
 
     private static ClassNode cloneClass(ClassNode cn) {

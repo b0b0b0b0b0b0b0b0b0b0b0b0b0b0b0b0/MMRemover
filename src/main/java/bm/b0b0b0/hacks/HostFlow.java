@@ -1,30 +1,31 @@
 package bm.b0b0b0.hacks;
 
 import javax.swing.JTextArea;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.asm.JarClassWriter;
+import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.TypeInsnNode;
-
-import bm.b0b0b0.util.files.CleanPipeline;
 
 public class HostFlow {
 
@@ -32,6 +33,7 @@ public class HostFlow {
     private final Path outputPath;
     private final ExecutorService executor;
     private final Conf conf;
+
     public HostFlow(Path pluginsPath, Path outputPath, boolean removeMalware, JTextArea consoleArea, Conf conf) {
         this.outputPath = outputPath;
         this.conf = conf;
@@ -103,6 +105,7 @@ public class HostFlow {
         try (ZipFile zip = new ZipFile(src);
              ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outputFile))) {
 
+            Map<String, byte[]> jarClasses = indexJarClasses(zip);
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry zipEntry = entries.nextElement();
@@ -122,7 +125,7 @@ public class HostFlow {
 
                 if (entryName.endsWith(".class")) {
                     b0b0b0Dick.log(String.format(conf.getTranslation("processingClass"), entryName));
-                    processClassEntry(zip, out, zipEntry, ignoreOnOutput);
+                    processClassEntry(zip, out, zipEntry, ignoreOnOutput, jarClasses);
                 } else {
                     try (InputStream entryInputStream = zip.getInputStream(zipEntry)) {
                         out.putNextEntry(new ZipEntry(entryName));
@@ -146,41 +149,69 @@ public class HostFlow {
         }
     }
 
-    private void processClassEntry(ZipFile zip, ZipOutputStream out, ZipEntry zipEntry, List<String> ignoreOnOutput) throws Throwable {
+    private void processClassEntry(ZipFile zip, ZipOutputStream out, ZipEntry zipEntry,
+                                   List<String> ignoreOnOutput, Map<String, byte[]> jarClasses) throws IOException {
+        byte[] original;
         try (InputStream in = zip.getInputStream(zipEntry)) {
-            ClassReader cr = new ClassReader(in);
-            ClassNode classNode = new ClassNode();
-            cr.accept(classNode, 0);
+            original = in.readAllBytes();
+        }
 
-            if ("org/bukkit/plugin/java/JavaPlugin".equals(classNode.superName)) {
-                for (MethodNode mn : classNode.methods) {
-                    if ("onEnable".equals(mn.name)) {
-                        List<AbstractInsnNode> toRemove = new CopyOnWriteArrayList<>();
-                        for (AbstractInsnNode insn : mn.instructions) {
-                            if (insn instanceof TypeInsnNode tinsn) {
-                                if ((classNode.name + "L10").equals(tinsn.desc)) {
-                                    ignoreOnOutput.add(classNode.name + "L10.class");
-                                    b0b0b0Dick.log(conf.getTranslation("removingInstructions") + ": " + tinsn.desc);
-                                    for (int i = 0; i <= 6; i++) {
-                                        toRemove.add(getNext(insn, i));
-                                    }
+        if (ignoreOnOutput.contains(zipEntry.getName())) {
+            b0b0b0Dick.log(conf.getTranslation("ignoringClass") + ": " + zipEntry.getName());
+            return;
+        }
+
+        ClassReader cr = new ClassReader(original);
+        ClassNode classNode = new ClassNode();
+        cr.accept(classNode, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+        boolean changed = false;
+        if ("org/bukkit/plugin/java/JavaPlugin".equals(classNode.superName)) {
+            for (MethodNode mn : classNode.methods) {
+                if ("onEnable".equals(mn.name)) {
+                    List<AbstractInsnNode> toRemove = new CopyOnWriteArrayList<>();
+                    for (AbstractInsnNode insn : mn.instructions) {
+                        if (insn instanceof TypeInsnNode tinsn) {
+                            if ((classNode.name + "L10").equals(tinsn.desc)) {
+                                ignoreOnOutput.add(classNode.name + "L10.class");
+                                b0b0b0Dick.log(conf.getTranslation("removingInstructions") + ": " + tinsn.desc);
+                                for (int i = 0; i <= 6; i++) {
+                                    toRemove.add(getNext(insn, i));
                                 }
                             }
                         }
+                    }
+                    if (!toRemove.isEmpty()) {
+                        changed = true;
                         toRemove.forEach(mn.instructions::remove);
                     }
                 }
             }
+        }
 
-            ClassWriter cw = new ClassWriter(1);
-            classNode.accept(cw);
-            if (!ignoreOnOutput.contains(zipEntry.getName())) {
-                out.putNextEntry(new ZipEntry(zipEntry.getName()));
-                b0b0b0Dick.writeZipEntry(out, new ByteArrayInputStream(cw.toByteArray()));
-            } else {
-                b0b0b0Dick.log(conf.getTranslation("ignoringClass") + ": " + zipEntry.getName());
+        out.putNextEntry(new ZipEntry(zipEntry.getName()));
+        if (!changed) {
+            out.write(original);
+            return;
+        }
+        out.write(JarClassWriter.writeModified(classNode, jarClasses));
+    }
+
+    private static Map<String, byte[]> indexJarClasses(ZipFile zip) throws IOException {
+        Map<String, byte[]> map = new HashMap<>();
+        Enumeration<? extends ZipEntry> entries = zip.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                continue;
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                byte[] data = in.readAllBytes();
+                map.put(entry.getName(), data);
+                map.put(entry.getName().substring(0, entry.getName().length() - ".class".length()), data);
             }
         }
+        return map;
     }
 
     private AbstractInsnNode getNext(AbstractInsnNode node, int amount) {

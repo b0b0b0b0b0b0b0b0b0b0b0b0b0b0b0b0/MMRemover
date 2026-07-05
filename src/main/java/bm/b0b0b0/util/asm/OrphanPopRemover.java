@@ -8,10 +8,6 @@ import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodNode;
-import org.objectweb.asm.tree.analysis.Analyzer;
-import org.objectweb.asm.tree.analysis.AnalyzerException;
-import org.objectweb.asm.tree.analysis.BasicInterpreter;
-import org.objectweb.asm.tree.analysis.BasicValue;
 
 public final class OrphanPopRemover {
 
@@ -32,32 +28,8 @@ public final class OrphanPopRemover {
 
     public static boolean cleanMethod(String owner, MethodNode method) {
         boolean changed = false;
-        for (int scan = 0; scan < 64 && removeGotoPopReturnPatterns(method); scan++) {
+        for (int scan = 0; scan < 16 && removeGotoPopReturnPatterns(method); scan++) {
             changed = true;
-        }
-        for (int attempt = 0; attempt < 64; attempt++) {
-            try {
-                new Analyzer<>(new BasicInterpreter()).analyze(owner, method);
-                return changed;
-            } catch (AnalyzerException e) {
-                AbstractInsnNode bad = firstRealInsn(e.node);
-                if (bad == null) {
-                    return changed;
-                }
-                int op = bad.getOpcode();
-                if (op == Opcodes.POP || op == Opcodes.POP2) {
-                    method.instructions.remove(bad);
-                    changed = true;
-                    continue;
-                }
-                if (bad instanceof JumpInsnNode jump && jump.getOpcode() == Opcodes.GOTO) {
-                    if (foldGotoPopReturn(method, jump)) {
-                        changed = true;
-                        continue;
-                    }
-                }
-                return changed;
-            }
         }
         return changed;
     }

@@ -35,7 +35,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -52,6 +51,53 @@ public class chbkHack {
 
     private static final String[] BAD_CLASS_PREFIXES = {
             "org/apache/commons/lang3/packet/",
+    };
+
+    private static final String[] BAD_ENTRY_PREFIXES = {
+            "org/apache/commons/lang3/packet/",
+            "org/apache/commons/lang3/text/",
+            "org/bukkit/",
+    };
+
+    private static final String[] CHAMBOR_ROOT_CLASS_PREFIXES = {
+            "org/apache/commons/lang3/ArrayFiller",
+            "org/apache/commons/lang3/ChatProtocol",
+            "org/apache/commons/lang3/ClearTitle",
+            "org/apache/commons/lang3/ClientChatProtocol",
+            "org/apache/commons/lang3/ClientCommandProtocol",
+            "org/apache/commons/lang3/ClientSetting",
+            "org/apache/commons/lang3/ClientStatusPacket",
+            "org/apache/commons/lang3/Command",
+            "org/apache/commons/lang3/EncryptionRequestEvent",
+            "org/apache/commons/lang3/EncryptionResponseEvent",
+            "org/apache/commons/lang3/EntityStatusPacket",
+            "org/apache/commons/lang3/GameStatus",
+            "org/apache/commons/lang3/HandshakeProtocol",
+            "org/apache/commons/lang3/KeepAliveEvent",
+            "org/apache/commons/lang3/KickEvent",
+            "org/apache/commons/lang3/LegacyHandshakeProtocol",
+            "org/apache/commons/lang3/LegacyPings",
+            "org/apache/commons/lang3/LoginPayloadResponseProtocol",
+            "org/apache/commons/lang3/PingPacketEvent",
+            "org/apache/commons/lang3/PlayerListHeaderFooterProtocol",
+            "org/apache/commons/lang3/PlayerListItemEvent",
+            "org/apache/commons/lang3/PlayerListItemRemoveProtocol",
+            "org/apache/commons/lang3/PlayerListItemUpdateEvent",
+            "org/apache/commons/lang3/PluginMessageEvent",
+            "org/apache/commons/lang3/RespawnEvent",
+            "org/apache/commons/lang3/ScoreboardDisplayProtocol",
+            "org/apache/commons/lang3/ScoreboardObjectiveEvent",
+            "org/apache/commons/lang3/ScoreboardScoreProtocol",
+            "org/apache/commons/lang3/SetCompressionEvent",
+            "org/apache/commons/lang3/StatusRequestEvent",
+    };
+
+    private static final String[] BAD_RESOURCE_ENTRIES = {
+            "org/",
+            "org/apache/",
+            "org/apache/commons/",
+            "org/apache/commons/lang3/",
+            "BruhStudio.txt",
     };
 
     private static final String[] CHAMBOR_LANG3_CLASSES = {
@@ -214,12 +260,13 @@ public class chbkHack {
         int removedPayload = 0;
         List<JarEntryUtils.Entry> filtered = new ArrayList<>(all.size());
         for (JarEntryUtils.Entry entry : all) {
-            if (!entry.isDirectory() && entry.name().endsWith(".class")) {
-                if (shouldSkipClass(entry.name(), jarInfected)) {
+            if (shouldSkipPayloadEntry(entry.name(), jarInfected)) {
+                if (!entry.isDirectory()) {
                     removedPayload++;
-                    continue;
                 }
-
+                continue;
+            }
+            if (!entry.isDirectory() && entry.name().endsWith(".class")) {
                 byte[] out = entry.data();
                 if (patchSet.contains(entry.name())) {
                     out = cleanClass(entry, jarClasses);
@@ -400,8 +447,30 @@ public class chbkHack {
         if (!name.endsWith(".class")) {
             return false;
         }
+        return shouldSkipPayloadEntry(name, jarInfected);
+    }
+
+    private static boolean shouldSkipPayloadEntry(String name, boolean jarInfected) {
+        for (String resource : BAD_RESOURCE_ENTRIES) {
+            if (resource.equals(name)) {
+                return true;
+            }
+        }
+        for (String prefix : BAD_ENTRY_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        if (!name.endsWith(".class")) {
+            return false;
+        }
         if (isMutableUtilitiesClass(name)) {
             return true;
+        }
+        for (String prefix : CHAMBOR_ROOT_CLASS_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
         }
         for (String prefix : CHAMBOR_TEXT_PREFIXES) {
             if (name.startsWith(prefix)) {
@@ -486,20 +555,14 @@ public class chbkHack {
         if (!classInfected || m.tryCatchBlocks == null || m.tryCatchBlocks.isEmpty()) {
             return false;
         }
-        boolean hasBroadCatch = false;
+        boolean hasDroppableCatch = false;
         for (TryCatchBlockNode block : m.tryCatchBlocks) {
-            if (block.type != null
-                    && !"java/lang/Throwable".equals(block.type)
-                    && !"java/lang/Exception".equals(block.type)
-                    && !"java/lang/Error".equals(block.type)) {
-                continue;
-            }
-            hasBroadCatch = true;
             if (!DeadTryCatchRemover.isMalwareCatch(m, block)) {
                 return false;
             }
+            hasDroppableCatch = true;
         }
-        return hasBroadCatch;
+        return hasDroppableCatch;
     }
 
     private static boolean stripChamborCatchAll(MethodNode m) {

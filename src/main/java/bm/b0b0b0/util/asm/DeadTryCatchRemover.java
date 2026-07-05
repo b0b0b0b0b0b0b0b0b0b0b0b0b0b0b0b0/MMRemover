@@ -110,10 +110,10 @@ public final class DeadTryCatchRemover {
             }
             return shouldDrop(method, block);
         }
-        if (!isBroadCatch(block.type)) {
-            return false;
+        if (shouldDrop(method, block)) {
+            return true;
         }
-        return shouldDrop(method, block);
+        return false;
     }
 
     public static void dropHandlerBlock(MethodNode method, TryCatchBlockNode block) {
@@ -122,12 +122,6 @@ public final class DeadTryCatchRemover {
         }
         neutralizeHandlerGotos(method, block.handler);
         removeHandlerInstructions(method, block.handler);
-    }
-
-    private static boolean isBroadCatch(String type) {
-        return "java/lang/Throwable".equals(type)
-                || "java/lang/Exception".equals(type)
-                || "java/lang/Error".equals(type);
     }
 
     private static boolean isSyncCatch(MethodNode method, TryCatchBlockNode block) {

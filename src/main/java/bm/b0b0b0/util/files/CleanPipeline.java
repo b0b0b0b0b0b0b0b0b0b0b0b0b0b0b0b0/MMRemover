@@ -1,7 +1,13 @@
 package bm.b0b0b0.util.files;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
+/**
+ * Chains multiple cleaners onto one output JAR during "clean all" runs.
+ */
 public final class CleanPipeline {
 
     private static final ThreadLocal<Boolean> UNIFIED = ThreadLocal.withInitial(() -> false);
@@ -9,17 +15,35 @@ public final class CleanPipeline {
     private CleanPipeline() {
     }
 
-    public static void beginUnified(File outputDir) {
+    public static void beginUnified(File inputDir, File outputDir) {
         UNIFIED.set(true);
-        if (!outputDir.exists()) {
+        if (outputDir == null) {
             return;
         }
-        File[] files = outputDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
-        if (files == null) {
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
             return;
         }
-        for (File file : files) {
-            file.delete();
+        seedOutputFromInput(inputDir, outputDir);
+    }
+
+    public static void beginUnified(File outputDir) {
+        beginUnified(null, outputDir);
+    }
+
+    private static void seedOutputFromInput(File inputDir, File outputDir) {
+        if (inputDir == null || !inputDir.isDirectory()) {
+            return;
+        }
+        File[] inputJars = inputDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
+        if (inputJars == null) {
+            return;
+        }
+        for (File jar : inputJars) {
+            File dest = new File(outputDir, jar.getName());
+            try {
+                Files.copy(jar.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException ignored) {
+            }
         }
     }
 

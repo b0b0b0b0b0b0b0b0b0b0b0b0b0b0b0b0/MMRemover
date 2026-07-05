@@ -156,7 +156,7 @@ public class PluginMetrics {
                             }
 
                             if (classModified) {
-                                ClassWriter cw = new CustomClassWriter(ClassWriter.COMPUTE_MAXS);
+                                ClassWriter cw = new CustomClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
                                 classNode.accept(cw);
                                 out.putNextEntry(new ZipEntry(zipEntry.getName()));
                                 b0b0b0Dick.writeZipEntry(out, new ByteArrayInputStream(cw.toByteArray()));

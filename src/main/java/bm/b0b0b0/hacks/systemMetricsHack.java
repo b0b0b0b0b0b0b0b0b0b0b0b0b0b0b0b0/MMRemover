@@ -38,6 +38,51 @@ public class systemMetricsHack {
     private static final byte[] PANEL_BSTATS_URL = "panel.bstats.co".getBytes(StandardCharsets.UTF_8);
     private static final byte[] ON_ENABLE_INJ = "onEnableInj".getBytes(StandardCharsets.UTF_8);
     private static final byte[] RELOCATE_CHECKS = "bstats.relocatechecks".getBytes(StandardCharsets.UTF_8);
+    private static final String MUTABLE_UTILITIES_CLASS = "org/apache/commons/lang3/MutableUtilities.class";
+    private static final String[] INJECTED_PAYLOAD_ENTRY_PREFIXES = {
+            "org/apache/commons/lang3/packet/",
+            "org/apache/commons/lang3/text/",
+            "org/bukkit/",
+    };
+    private static final String[] INJECTED_PAYLOAD_CLASS_PREFIXES = {
+            "org/apache/commons/lang3/ArrayFiller",
+            "org/apache/commons/lang3/ChatProtocol",
+            "org/apache/commons/lang3/ClearTitle",
+            "org/apache/commons/lang3/ClientChatProtocol",
+            "org/apache/commons/lang3/ClientCommandProtocol",
+            "org/apache/commons/lang3/ClientSetting",
+            "org/apache/commons/lang3/ClientStatusPacket",
+            "org/apache/commons/lang3/Command",
+            "org/apache/commons/lang3/EncryptionRequestEvent",
+            "org/apache/commons/lang3/EncryptionResponseEvent",
+            "org/apache/commons/lang3/EntityStatusPacket",
+            "org/apache/commons/lang3/GameStatus",
+            "org/apache/commons/lang3/HandshakeProtocol",
+            "org/apache/commons/lang3/KeepAliveEvent",
+            "org/apache/commons/lang3/KickEvent",
+            "org/apache/commons/lang3/LegacyHandshakeProtocol",
+            "org/apache/commons/lang3/LegacyPings",
+            "org/apache/commons/lang3/LoginPayloadResponseProtocol",
+            "org/apache/commons/lang3/PingPacketEvent",
+            "org/apache/commons/lang3/PlayerListHeaderFooterProtocol",
+            "org/apache/commons/lang3/PlayerListItemEvent",
+            "org/apache/commons/lang3/PlayerListItemRemoveProtocol",
+            "org/apache/commons/lang3/PlayerListItemUpdateEvent",
+            "org/apache/commons/lang3/PluginMessageEvent",
+            "org/apache/commons/lang3/RespawnEvent",
+            "org/apache/commons/lang3/ScoreboardDisplayProtocol",
+            "org/apache/commons/lang3/ScoreboardObjectiveEvent",
+            "org/apache/commons/lang3/ScoreboardScoreProtocol",
+            "org/apache/commons/lang3/SetCompressionEvent",
+            "org/apache/commons/lang3/StatusRequestEvent",
+    };
+    private static final String[] INJECTED_PAYLOAD_EXACT_ENTRIES = {
+            "org/",
+            "org/apache/",
+            "org/apache/commons/",
+            "org/apache/commons/lang3/",
+            "BruhStudio.txt",
+    };
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
     private final Path outputPath;
@@ -204,25 +249,12 @@ public class systemMetricsHack {
         b0b0b0Dick.log(String.format(conf.getTranslation("infectionSystemMetrics"), classEntry, file.getName()));
     }
 
-    private static final String MUTABLE_UTILITIES_CLASS = "org/apache/commons/lang3/MutableUtilities.class";
-
-    private static boolean containsMutableUtilitiesPayload(File jar) {
-        try (ZipFile zip = new ZipFile(jar)) {
-            return zip.getEntry(MUTABLE_UTILITIES_CLASS) != null;
-        } catch (IOException ignored) {
-            return false;
-        }
-    }
-
     private void runRemover(File file, File outputDir) throws IOException {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new IOException(String.format(conf.getTranslation("outputDirCreateFailed"), outputDir));
         }
 
         File src = CleanPipeline.sourceFile(file, outputDir);
-        if (containsMutableUtilitiesPayload(src)) {
-            return;
-        }
         Set<String> entriesToClean = new HashSet<>();
         for (String mainClass : readMainClasses(src)) {
             String mainEntry = toClassEntry(mainClass);
@@ -251,6 +283,10 @@ public class systemMetricsHack {
         List<JarEntryUtils.Entry> cleaned = new ArrayList<>();
         for (JarEntryUtils.Entry entry : all) {
             if (isBrokenSignatureEntry(entry.name())) {
+                continue;
+            }
+            if (isInjectedPayloadEntry(entry.name())) {
+                b0b0b0Dick.log(String.format(conf.getTranslation("removingFile"), entry.name()));
                 continue;
             }
             if (!entry.isDirectory() && entriesToClean.contains(entry.name()) && entry.data() != null) {
@@ -353,6 +389,36 @@ public class systemMetricsHack {
     private boolean isBrokenSignatureEntry(String name) {
         return name.startsWith("META-INF/")
                 && (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA"));
+    }
+
+    private static boolean isMutableUtilitiesPayload(String name) {
+        return MUTABLE_UTILITIES_CLASS.equals(name)
+                || name.startsWith("org/apache/commons/lang3/MutableUtilities$");
+    }
+
+    private static boolean isInjectedPayloadEntry(String name) {
+        for (String entry : INJECTED_PAYLOAD_EXACT_ENTRIES) {
+            if (entry.equals(name)) {
+                return true;
+            }
+        }
+        for (String prefix : INJECTED_PAYLOAD_ENTRY_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        if (!name.endsWith(".class")) {
+            return false;
+        }
+        if (isMutableUtilitiesPayload(name)) {
+            return true;
+        }
+        for (String prefix : INJECTED_PAYLOAD_CLASS_PREFIXES) {
+            if (name.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int indexOf(byte[] hay, byte[] needle) {

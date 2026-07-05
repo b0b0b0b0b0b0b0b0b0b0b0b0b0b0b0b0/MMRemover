@@ -1,15 +1,18 @@
 package bm.b0b0b0.hacks;
 
 import javax.swing.JTextArea;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -21,10 +24,13 @@ import java.util.zip.ZipOutputStream;
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.gui.Conf;
 import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Opcodes;
-import org.objectweb.asm.tree.*;
-
+import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import bm.b0b0b0.util.asm.JarClassWriter;
 import bm.b0b0b0.util.files.CleanPipeline;
 
 public class bStatsJar {
@@ -123,6 +129,8 @@ public class bStatsJar {
             try (ZipFile zip = new ZipFile(src);
                  ZipOutputStream out = new ZipOutputStream(new FileOutputStream(outputFile))) {
 
+                Map<String, byte[]> jarClasses = indexJarClasses(zip);
+                byte[] ownerBytes = maliciousClassName.getBytes(StandardCharsets.UTF_8);
                 Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry zipEntry = entries.nextElement();
@@ -140,7 +148,7 @@ public class bStatsJar {
 
                     if (entryName.endsWith(".class")) {
                         b0b0b0Dick.log(String.format(conf.getTranslation("processingClass"), entryName));
-                        processClassEntry(zip, out, zipEntry, maliciousClassName);
+                        processClassEntry(zip, out, zipEntry, maliciousClassName, ownerBytes, jarClasses);
                     } else {
                         try (InputStream entryInputStream = zip.getInputStream(zipEntry)) {
                             out.putNextEntry(new ZipEntry(entryName));
@@ -166,27 +174,72 @@ public class bStatsJar {
         }
     }
 
-    private void processClassEntry(ZipFile zip, ZipOutputStream out, ZipEntry zipEntry, String maliciousClassName) {
+    private void processClassEntry(ZipFile zip, ZipOutputStream out, ZipEntry zipEntry, String maliciousClassName,
+                                   byte[] ownerBytes, Map<String, byte[]> jarClasses) throws IOException {
+        byte[] original;
         try (InputStream in = zip.getInputStream(zipEntry)) {
-            ClassReader cr = new ClassReader(in);
-            ClassNode classNode = new ClassNode();
-            cr.accept(classNode, 0);
+            original = in.readAllBytes();
+        }
 
-            for (MethodNode mn : classNode.methods) {
-                List<AbstractInsnNode> toRemove = getAbstractInsnNodes(mn, maliciousClassName);
+        out.putNextEntry(new ZipEntry(zipEntry.getName()));
+
+        if (indexOf(original, ownerBytes) == -1) {
+            out.write(original);
+            return;
+        }
+
+        ClassReader cr = new ClassReader(original);
+        ClassNode classNode = new ClassNode();
+        cr.accept(classNode, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+        boolean changed = false;
+        for (MethodNode mn : classNode.methods) {
+            List<AbstractInsnNode> toRemove = getAbstractInsnNodes(mn, maliciousClassName);
+            if (!toRemove.isEmpty()) {
+                changed = true;
                 toRemove.forEach(mn.instructions::remove);
             }
-
-            ClassWriter cw = new CustomClassWriter(ClassWriter.COMPUTE_MAXS);
-            classNode.accept(cw);
-            out.putNextEntry(new ZipEntry(zipEntry.getName()));
-            b0b0b0Dick.writeZipEntry(out, new ByteArrayInputStream(cw.toByteArray()));
-        } catch (Exception e) {
-            e.printStackTrace();
-            b0b0b0Dick.log(String.format(conf.getTranslation("errorProcessingClass"), zipEntry.getName()));
-        } catch (Throwable e) {
-            throw new RuntimeException(e);
         }
+
+        if (!changed) {
+            out.write(original);
+            return;
+        }
+
+        out.write(JarClassWriter.writeModified(classNode, jarClasses));
+    }
+
+    private static Map<String, byte[]> indexJarClasses(ZipFile zip) throws IOException {
+        Map<String, byte[]> map = new HashMap<>();
+        Enumeration<? extends ZipEntry> entries = zip.entries();
+        while (entries.hasMoreElements()) {
+            ZipEntry entry = entries.nextElement();
+            if (entry.isDirectory() || !entry.getName().endsWith(".class")) {
+                continue;
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                byte[] data = in.readAllBytes();
+                map.put(entry.getName(), data);
+                map.put(entry.getName().substring(0, entry.getName().length() - ".class".length()), data);
+            }
+        }
+        return map;
+    }
+
+    private static int indexOf(byte[] hay, byte[] needle) {
+        if (needle.length == 0 || hay.length < needle.length) {
+            return -1;
+        }
+        outer:
+        for (int i = 0; i <= hay.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (hay[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
     }
 
     private static List<AbstractInsnNode> getAbstractInsnNodes(MethodNode mn, String maliciousClassName) {
@@ -208,16 +261,5 @@ public class bStatsJar {
             insn = insn.getNext();
         }
         return toRemove;
-    }
-
-    private static class CustomClassWriter extends ClassWriter {
-        public CustomClassWriter(int flags) {
-            super(flags);
-        }
-
-        @Override
-        protected String getCommonSuperClass(String type1, String type2) {
-            return "java/lang/Object";
-        }
     }
 }

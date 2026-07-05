@@ -16,7 +16,7 @@ public class FileProcessor {
 
     public static void processAllFiles(Path inputPath, Path outputPath, JTextArea consoleArea, Conf conf) {
         File outputFolder = outputPath.toFile();
-        CleanPipeline.beginUnified(outputFolder);
+        CleanPipeline.beginUnified(inputPath.toFile(), outputFolder);
         try {
             FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileProcessingStart"));
             for (String type : ALL_TYPES) {
