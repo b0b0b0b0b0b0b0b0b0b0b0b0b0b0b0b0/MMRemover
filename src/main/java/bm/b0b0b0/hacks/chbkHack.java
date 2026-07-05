@@ -4,6 +4,7 @@ import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.asm.AntiTamperBypass;
 import bm.b0b0b0.util.asm.CaseInsensitiveClassRefFixer;
 import bm.b0b0b0.util.asm.DeadTryCatchRemover;
+import bm.b0b0b0.util.asm.FlowObfuscationDetector;
 import bm.b0b0b0.util.asm.JarClassWriter;
 import bm.b0b0b0.util.asm.OrphanPopRemover;
 import bm.b0b0b0.util.asm.TryCatchBlockPruner;
@@ -289,12 +290,12 @@ public class chbkHack {
         }
         if (jarInfected) {
             jarClasses = JarClassWriter.indexClasses(filtered);
-            Set<String> antiTamperTargets = new HashSet<>(patchSet);
+            Set<String> antiTamperTargets = new HashSet<>();
             for (JarEntryUtils.Entry entry : filtered) {
                 if (entry.isDirectory() || !entry.name().endsWith(".class") || entry.data() == null) {
                     continue;
                 }
-                if (AntiTamperBypass.containsHashError(entry.data())) {
+                if (AntiTamperBypass.mayNeedBypass(entry.data())) {
                     antiTamperTargets.add(entry.name());
                 }
             }
@@ -468,6 +469,7 @@ public class chbkHack {
         cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.EXPAND_FRAMES);
 
         boolean hasRefs = referencesMutableUtilities(cn);
+        boolean gentlePatch = FlowObfuscationDetector.requiresGentlePatch(clazz);
         boolean changed = false;
         Set<String> touchedMethods = new HashSet<>();
         Iterator<MethodNode> methodIterator = cn.methods.iterator();
@@ -489,17 +491,17 @@ public class chbkHack {
                     methodChanged = true;
                 }
             }
-            if (methodChanged) {
+            if (methodChanged && !gentlePatch) {
                 DeadTryCatchRemover.cleanMethod(m);
             }
-            if (shouldStripChamborMethod(m, hasRefs, methodChanged) && stripChamborCatchAll(m)) {
+            if (!gentlePatch && shouldStripChamborMethod(m, hasRefs, methodChanged) && stripChamborCatchAll(m)) {
                 changed = true;
                 methodChanged = true;
             }
-            if (methodChanged) {
+            if (methodChanged && !gentlePatch) {
                 DeadTryCatchRemover.repairHandlerJumps(m);
             }
-            if (methodChanged) {
+            if (methodChanged && !gentlePatch) {
                 while (OrphanPopRemover.cleanMethod(cn.name, m)) {
                     TryCatchBlockPruner.prune(m);
                 }
@@ -512,16 +514,16 @@ public class chbkHack {
         if (!changed) {
             return clazz;
         }
-        return rewriteClassOrFallback(cr, cn, jarClasses, clazz, touchedMethods);
+        return rewriteClassOrFallback(cr, cn, jarClasses, clazz, touchedMethods, gentlePatch);
     }
 
     private byte[] rewriteClassOrFallback(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
-                                          byte[] fallback, Set<String> touchedMethods) {
+                                          byte[] fallback, Set<String> touchedMethods, boolean gentlePatch) {
         try {
-            return JarClassWriter.writeModified(cn, jarClasses, touchedMethods);
+            return JarClassWriter.writeModified(cn, jarClasses, touchedMethods, !gentlePatch);
         } catch (Throwable primary) {
             try {
-                return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods);
+                return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods, !gentlePatch);
             } catch (Throwable secondary) {
                 try {
                     return JarClassWriter.emitComputed(cr, cn, jarClasses);

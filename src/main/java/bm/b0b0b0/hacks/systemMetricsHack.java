@@ -1,6 +1,7 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.asm.FlowObfuscationDetector;
 import bm.b0b0b0.util.asm.JarClassWriter;
 import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
@@ -363,8 +364,9 @@ public class systemMetricsHack {
                 return clazz;
             }
 
+            boolean gentlePatch = FlowObfuscationDetector.requiresGentlePatch(clazz);
             if (!touchedMethods.isEmpty()) {
-                return JarClassWriter.writeModified(cn, jarClasses, touchedMethods);
+                return JarClassWriter.writeModified(cn, jarClasses, touchedMethods, !gentlePatch);
             }
             try {
                 return JarClassWriter.writePreserving(cr, cn);

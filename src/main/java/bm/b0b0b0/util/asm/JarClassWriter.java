@@ -30,11 +30,20 @@ public final class JarClassWriter {
 
     public static byte[] writePatchedMethods(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
                                              Set<String> touchedMethodKeys) {
+        return writePatchedMethods(cr, cn, jarClasses, touchedMethodKeys, true);
+    }
+
+    public static byte[] writePatchedMethods(ClassReader cr, ClassNode cn, Map<String, byte[]> jarClasses,
+                                             Set<String> touchedMethodKeys, boolean cleanDeadTryCatch) {
         MethodBodyGuard.ensureClassBodies(cn);
         if (touchedMethodKeys.isEmpty()) {
             return writeFresh(cn, jarClasses);
         }
-        finalizeTouchedMethods(cn, touchedMethodKeys);
+        if (cleanDeadTryCatch) {
+            finalizeTouchedMethods(cn, touchedMethodKeys);
+        } else {
+            finalizeTouchedMethodsLight(cn, touchedMethodKeys);
+        }
         stripAllFrames(cn);
         try {
             return emitComputedFrames(cn, jarClasses);
@@ -51,6 +60,18 @@ public final class JarClassWriter {
             finalizeMethodForFrameRecompute(cn.name, method);
         }
         TryCatchBlockPruner.prune(cn);
+    }
+
+    private static void finalizeTouchedMethodsLight(ClassNode cn, Set<String> touchedMethodKeys) {
+        for (MethodNode method : cn.methods) {
+            if (!touchedMethodKeys.contains(method.name + method.desc)) {
+                continue;
+            }
+            MethodBodyGuard.ensureMethodBody(method);
+            TryCatchBlockDeduplicator.dedupe(method);
+            FrameRecomputer.stripFrames(method);
+            method.localVariables = null;
+        }
     }
 
     public static byte[] writeFresh(ClassNode cn, Map<String, byte[]> jarClasses) {
@@ -83,9 +104,14 @@ public final class JarClassWriter {
     }
 
     public static byte[] writeModified(ClassNode cn, Map<String, byte[]> jarClasses, Set<String> touchedMethodKeys) {
+        return writeModified(cn, jarClasses, touchedMethodKeys, true);
+    }
+
+    public static byte[] writeModified(ClassNode cn, Map<String, byte[]> jarClasses, Set<String> touchedMethodKeys,
+                                       boolean cleanDeadTryCatch) {
         if (touchedMethodKeys != null && !touchedMethodKeys.isEmpty()) {
             ClassReader cr = new ClassReader(cloneToBytes(cn));
-            return writePatchedMethods(cr, cn, jarClasses, touchedMethodKeys);
+            return writePatchedMethods(cr, cn, jarClasses, touchedMethodKeys, cleanDeadTryCatch);
         }
         ClassReader cr = new ClassReader(cloneToBytes(cn));
         return writePreserving(cr, cn);

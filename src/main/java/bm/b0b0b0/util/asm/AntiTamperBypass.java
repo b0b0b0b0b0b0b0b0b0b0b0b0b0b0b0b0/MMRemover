@@ -46,16 +46,7 @@ public final class AntiTamperBypass {
         if (clazz == null || clazz.length == 0) {
             return false;
         }
-        String s = new String(clazz, StandardCharsets.ISO_8859_1);
-        if (s.contains(HASH_ERROR)) {
-            return true;
-        }
-        if (!s.contains("MutableUtilities")) {
-            return false;
-        }
-        return s.contains("java/io/IOException")
-                || s.contains("java/lang/IllegalAccessException")
-                || s.contains("java/lang/RuntimeException");
+        return containsHashError(clazz);
     }
 
     public static byte[] bypass(byte[] clazz, Map<String, byte[]> jarClasses) {
@@ -67,12 +58,13 @@ public final class AntiTamperBypass {
         cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
         Set<String> touchedMethods = new HashSet<>();
         boolean changed = false;
+        boolean flowObfuscated = FlowObfuscationDetector.isFlowObfuscated(clazz);
         for (MethodNode method : cn.methods) {
             if (bypassMethod(method)) {
                 touchedMethods.add(method.name + method.desc);
                 changed = true;
             }
-            if (removeOrphanAthrow(method)) {
+            if (!flowObfuscated && removeOrphanAthrow(method)) {
                 touchedMethods.add(method.name + method.desc);
                 changed = true;
             }
@@ -81,10 +73,10 @@ public final class AntiTamperBypass {
             return clazz;
         }
         try {
-            return JarClassWriter.writeModified(cn, jarClasses, touchedMethods);
+            return JarClassWriter.writeModified(cn, jarClasses, touchedMethods, false);
         } catch (Throwable primary) {
             try {
-                return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods);
+                return JarClassWriter.writePatchedMethods(cr, cn, jarClasses, touchedMethods, false);
             } catch (Throwable secondary) {
                 try {
                     return JarClassWriter.writePreserving(cr, cn);
