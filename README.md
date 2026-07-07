@@ -176,7 +176,7 @@ User-Agent на C2: `Java/forchhh-core`. Ключ шифрования payload: 
 
 | Файл | Где скачать | Зачем |
 |------|-------------|--------|
-| **`MMRemover-1.xx.jar`** | [black-minecraft.com/resources/6091](https://black-minecraft.com/resources/6091/) | Сама программа (xx — номер версии с сайта) |
+| **`MMRemover-2.xx.jar`** | [black-minecraft.com/resources/6091](https://black-minecraft.com/resources/6091/) | Сама программа (xx — номер версии с сайта) |
 | **`start.bat`** | [**скачать запускатор**](https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.bat) | Проверяет Java и открывает MMRemover |
 
 **Запускатор обязателен.** Jar без `start.bat` — половина дела. Ссылка на bat:  
@@ -192,7 +192,7 @@ https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.ba
 ```
 Рабочий стол
   └── MMRemover
-        MMRemover-1.xx.jar
+        MMRemover-2.xx.jar
         start.bat
 ```
 
@@ -229,6 +229,7 @@ https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.ba
 |---------------------------|------------|
 | **Java не найдена** | Переустанови Adoptium, галочки PATH и JAVA_HOME, перезагрузка |
 | **jar не найден** | `MMRemover-*.jar` и `start.bat` должны лежать **в одной папке на рабочем столе** |
-| Скачал только jar, без bat | [Скачай запускатор `start.bat`](https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.bat) и положи в папку **`MMRemover`** на рабочем столе |
+| Скачал только jar, без bat | [Скачай запускатор `start.bat`](https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.bat) → **Download raw file**, в папку **`MMRemover`** |
+| Куча `'...' is not recognized as internal or external command` при запуске bat | **Сломанный `start.bat`**: скачал как `start.bat.txt`, открыл в Блокноте и сохранил с не той кодировкой, или скопировал текст вручную. **Удали** старый bat → [скачай заново Raw](https://github.com/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0/MMRemover/blob/main/start.bat) → имя строго **`start.bat`**, в одной папке с jar |
 | Файлы в «Загрузках», программа не видит jar | Перетащи оба файла в папку **`MMRemover`** на рабочем столе |
 | Плагин после очистки не работает | Так бывает. Скачай плагин **из надёжного источника** — **не** с неофициальных сайтов. Если плагин **важный**, а нормальную копию **не достать** — напиши мне в [Телеграм](https://t.me/b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0) |
