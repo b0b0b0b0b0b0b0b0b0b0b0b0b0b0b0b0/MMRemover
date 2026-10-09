@@ -337,6 +337,60 @@ public class UIManagerUtil {
         return getTrashIcon(16);
     }
 
+    public static Icon getBinIcon() {
+        return getBinIcon(16);
+    }
+
+    public static Icon getBinIcon(int size) {
+        return createDrawnTrashIcon(size);
+    }
+
+    public static Icon getBackupIcon() {
+        return getBackupIcon(16);
+    }
+
+    public static Icon getBackupIcon(int size) {
+        return createDrawnBackupIcon(size);
+    }
+
+    private static Icon createDrawnBackupIcon(int size) {
+        return new Icon() {
+            @Override
+            public void paintIcon(Component c, Graphics g, int x, int y) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(c == null || c.isEnabled() ? new Color(0x09b55d) : ICON_DISABLED_COLOR);
+                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+
+                float s = size / 16f;
+                int boxX = x + Math.round(2.5f * s);
+                int boxY = y + Math.round(4 * s);
+                int boxW = Math.round(11 * s);
+                int boxH = Math.round(9 * s);
+                int lidY = y + Math.round(6.5f * s);
+
+                g2.drawRoundRect(boxX, boxY, boxW, boxH, Math.round(1.5f * s), Math.round(1.5f * s));
+                g2.drawLine(boxX, lidY, boxX + boxW, lidY);
+
+                int latchX = x + Math.round(8 * s);
+                g2.drawLine(latchX, boxY, latchX, lidY);
+                int tabW = Math.round(2 * s);
+                g2.drawRect(latchX - tabW, boxY - Math.round(1.5f * s), tabW * 2, Math.round(1.5f * s));
+                g2.dispose();
+            }
+
+            @Override
+            public int getIconWidth() {
+                return size;
+            }
+
+            @Override
+            public int getIconHeight() {
+                return size;
+            }
+        };
+    }
+
     public static Icon getCopyIcon() {
         return getCopyIcon(16);
     }

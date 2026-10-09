@@ -2,10 +2,12 @@ package bm.b0b0b0;
 
 import bm.b0b0b0.util.AppLinks;
 import bm.b0b0b0.util.gui.Conf;
+import bm.b0b0b0.util.gui.ConfirmDeleteDialog;
 import bm.b0b0b0.util.gui.DragAndDropHandler;
 import bm.b0b0b0.util.gui.StyledButton;
 import bm.b0b0b0.util.files.FileListCellRenderer;
 import bm.b0b0b0.util.files.FileListInteraction;
+import bm.b0b0b0.util.files.BackupManager;
 import bm.b0b0b0.util.files.FileProcessor;
 import bm.b0b0b0.util.files.FileUtils;
 import bm.b0b0b0.util.gui.UIManagerUtil;
@@ -25,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -112,16 +115,21 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("openInputFolderButton")
         );
         JButton clearInputListButton = UIManagerUtil.createIconButton(
-                UIManagerUtil.getTrashIcon(),
+                UIManagerUtil.getBinIcon(),
                 conf.getTranslation("clearInputListButton")
         );
         JButton inspectInputButton = UIManagerUtil.createIconButton(
                 UIManagerUtil.getInspectorIcon(16),
                 conf.getTranslation("inspectInputPanelButton")
         );
+        JButton openBackupsButton = UIManagerUtil.createIconButton(
+                UIManagerUtil.getBackupIcon(),
+                conf.getTranslation("openBackupsButton")
+        );
         JPanel inputHeader = UIManagerUtil.createPanelHeader(
                 conf.getTranslation("inputPanelTitle"),
-                inspectInputButton, openInputFolderButton, clearInputListButton);
+                inspectInputButton, openBackupsButton,
+                openInputFolderButton, clearInputListButton);
         inputPanelTitleLabel = (JLabel) inputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
         inputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         inputPanel.add(inputHeader, BorderLayout.NORTH);
@@ -140,7 +148,7 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("openOutputFolderButton")
         );
         JButton clearOutputListButton = UIManagerUtil.createIconButton(
-                UIManagerUtil.getTrashIcon(),
+                UIManagerUtil.getBinIcon(),
                 conf.getTranslation("clearOutputListButton")
         );
         JButton inspectOutputButton = UIManagerUtil.createIconButton(
@@ -287,12 +295,28 @@ public class MainWindow extends JFrame {
             long startTime = System.currentTimeMillis();
             LoadingDialog loadingDialog = new LoadingDialog(this, conf);
 
-            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            SwingWorker<Void, String> worker = new SwingWorker<>() {
                 @Override
                 protected Void doInBackground() {
+                    publish(conf.getTranslation("backupLoadingTitle"));
+                    AppLogger.get().info(String.format(conf.getTranslation("backupStart"), pluginsDir.toAbsolutePath()));
+                    try {
+                        Path backup = BackupManager.createBackup(pluginsDir, conf, null);
+                        AppLogger.get().info(String.format(conf.getTranslation("backupDone"), backup.toAbsolutePath()));
+                    } catch (IOException ex) {
+                        AppLogger.get().error(String.format(conf.getTranslation("backupFailed"), ex.getMessage()));
+                    }
+                    publish(conf.getTranslation("loadingText"));
                     logCurrentDirectory(conf.getTranslation("cleanupAllStart"));
                     FileProcessor.processAllFiles(pluginsDir, Paths.get("out"), consoleArea, conf);
                     return null;
+                }
+
+                @Override
+                protected void process(List<String> chunks) {
+                    if (!chunks.isEmpty()) {
+                        loadingDialog.setStatus(chunks.get(chunks.size() - 1));
+                    }
                 }
 
                 @Override
@@ -304,12 +328,14 @@ public class MainWindow extends JFrame {
                         long remain = minDuration - elapsed;
                         Timer t = new Timer((int) remain, actionEvent -> {
                             loadingDialog.dispose();
+                            refreshFilesList(inputList, pluginsDir.toString());
                             refreshFilesList(outputList, "out");
                         });
                         t.setRepeats(false);
                         t.start();
                     } else {
                         loadingDialog.dispose();
+                        refreshFilesList(inputList, pluginsDir.toString());
                         refreshFilesList(outputList, "out");
                     }
                 }
@@ -348,6 +374,14 @@ public class MainWindow extends JFrame {
             FileUtils.openFolder(pluginsDir.toString(), consoleArea, conf);
         });
 
+        openBackupsButton.addActionListener(e -> {
+            try {
+                Files.createDirectories(BackupManager.backupsDir());
+            } catch (IOException ignored) {
+            }
+            FileUtils.openFolder(BackupManager.backupsDir().toString(), consoleArea, conf);
+        });
+
         openOutputFolderButton.addActionListener(e -> {
             logCurrentDirectory(conf.getTranslation("openOutputFolder"));
             FileUtils.openFolder("out", consoleArea, conf);
@@ -355,7 +389,7 @@ public class MainWindow extends JFrame {
 
         clearInputListButton.addActionListener(e -> {
             logCurrentDirectory(conf.getTranslation("clearInputList"));
-            if (confirmAction(conf.getTranslation("confirmClearInputList"))) {
+            if (confirmDangerousFolderDelete(pluginsDir.toAbsolutePath().toString())) {
                 clearFilesList(inputList);
                 FileUtils.clearFolder(new File(pluginsDir.toString()).toPath(), consoleArea, conf);
             }
@@ -363,7 +397,7 @@ public class MainWindow extends JFrame {
 
         clearOutputListButton.addActionListener(e -> {
             logCurrentDirectory(conf.getTranslation("clearOutputList"));
-            if (confirmAction(conf.getTranslation("confirmClearOutputList"))) {
+            if (confirmDangerousFolderDelete(new File("out").getAbsolutePath())) {
                 clearFilesList(outputList);
                 FileUtils.clearFolder(new File("out").toPath(), consoleArea, conf);
             }
@@ -592,6 +626,18 @@ public class MainWindow extends JFrame {
                 options[0]
         );
         return option == JOptionPane.YES_OPTION;
+    }
+
+    private boolean confirmDangerousFolderDelete(String folderDisplay) {
+        int[] countdownSeconds = {5, 4, 3};
+        String[] stageKeys = {"dangerDeleteStage1", "dangerDeleteStage2", "dangerDeleteStage3"};
+        for (int stage = 0; stage < stageKeys.length; stage++) {
+            String message = String.format(conf.getTranslation(stageKeys[stage]), folderDisplay);
+            if (!ConfirmDeleteDialog.show(this, conf, message, countdownSeconds[stage])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void restartApplication() {

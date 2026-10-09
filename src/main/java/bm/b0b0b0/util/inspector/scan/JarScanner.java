@@ -1,6 +1,7 @@
 package bm.b0b0b0.util.inspector.scan;
 
 import bm.b0b0b0.hacks.FakeBstatsMalwareDetector;
+import bm.b0b0b0.hacks.SpreaderMalwareDetector;
 import bm.b0b0b0.util.inspector.model.InspectionReport;
 
 import java.io.File;
@@ -79,7 +80,33 @@ public final class JarScanner {
         }
 
         applyMalwareAnalysis(entryNames, classFiles, report);
+        applySpreaderAnalysis(jarFile, entryNames, report);
         return report;
+    }
+
+    private static void applySpreaderAnalysis(File jarFile,
+                                              List<String> entryNames,
+                                              InspectionReport report) {
+        SpreaderMalwareDetector.Analysis spreader = SpreaderMalwareDetector.analyze(jarFile);
+        if (!spreader.reject()) {
+            return;
+        }
+        report.malwareDetected = true;
+        if (report.malwareReason == null || report.malwareReason.isBlank()) {
+            report.malwareReason = spreader.reason();
+        } else {
+            report.malwareReason = report.malwareReason + "; " + spreader.reason();
+        }
+        if (spreader.fingerprint() != null) {
+            report.malwareRoots.add("spreader:" + spreader.fingerprint());
+        }
+        for (String entry : entryNames) {
+            if (entry.startsWith(SpreaderMalwareDetector.SPARK_METRICS_PREFIX)
+                    || SpreaderMalwareDetector.SPARK_MAIN_ENTRY.equals(entry)
+                    || SpreaderMalwareDetector.PLUGMAN_DROPPER_ENTRY.equals(entry)) {
+                report.malwareRoots.add(entry);
+            }
+        }
     }
 
     private static void applyMalwareAnalysis(List<String> entryNames,

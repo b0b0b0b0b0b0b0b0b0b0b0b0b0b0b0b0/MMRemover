@@ -6,6 +6,7 @@ import bm.b0b0b0.util.gui.Conf;
 import javax.swing.JTextArea;
 import java.io.File;
 import java.nio.file.Path;
+import java.util.List;
 
 public class FileProcessor {
 
@@ -18,13 +19,37 @@ public class FileProcessor {
         File outputFolder = outputPath.toFile();
         CleanPipeline.beginUnified(inputPath.toFile(), outputFolder);
         try {
+            var rejectedSpreaders = CleanPipeline.rejectSpreaders(inputPath.toFile(), outputFolder);
+            for (CleanPipeline.RejectedJar rejected : rejectedSpreaders) {
+                FileUtils.appendToConsole(consoleArea, String.format(
+                        conf.getTranslation("spreaderJarRejected"),
+                        rejected.name(),
+                        rejected.reason(),
+                        rejected.fingerprint() == null ? "" : rejected.fingerprint()));
+            }
             FileUtils.appendToConsole(consoleArea, conf.getTranslation("fileProcessingStart"));
             for (String type : ALL_TYPES) {
                 processFiles(inputPath, outputPath, type, consoleArea, conf, false);
             }
             FileUtils.appendToConsole(consoleArea, conf.getTranslation("processingCompleted"));
+            appendSpreaderSummary(consoleArea, conf, rejectedSpreaders);
         } finally {
             CleanPipeline.endUnified();
+        }
+    }
+
+    private static void appendSpreaderSummary(JTextArea consoleArea, Conf conf,
+                                              List<CleanPipeline.RejectedJar> rejectedSpreaders) {
+        if (rejectedSpreaders.isEmpty()) {
+            return;
+        }
+        FileUtils.appendToConsole(consoleArea, conf.getTranslation("spreaderRejectDoneHeader"));
+        for (CleanPipeline.RejectedJar rejected : rejectedSpreaders) {
+            FileUtils.appendToConsole(consoleArea, String.format(
+                    conf.getTranslation("spreaderRejectDoneItem"),
+                    rejected.name(),
+                    rejected.reason(),
+                    rejected.fingerprint() == null ? "" : rejected.fingerprint()));
         }
     }
 

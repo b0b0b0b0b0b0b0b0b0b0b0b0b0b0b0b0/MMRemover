@@ -11,6 +11,7 @@ import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
@@ -44,6 +45,12 @@ import java.util.zip.ZipFile;
 public class ruBstatsHack {
 
     private static final int SHADED_LIB_MIN_CLASSES = 5;
+
+    private static final String[][] BASHER_TYPE_REMAP = {
+            {"ru/basher/configuration/CommentFileConfiguration", "org/bukkit/configuration/file/YamlConfiguration"},
+            {"ru/basher/configuration/CommentConfigurationSection", "org/bukkit/configuration/ConfigurationSection"},
+            {"ru/basher/configuration/CommentMemorySection", "org/bukkit/configuration/MemorySection"},
+    };
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
     private final Path outputPath;
@@ -94,6 +101,9 @@ public class ruBstatsHack {
     }
 
     private void scanFile(File file) {
+        if (CleanPipeline.isRejected(file.getName())) {
+            return;
+        }
         if (!file.getName().endsWith(".jar")) {
             return;
         }
@@ -396,20 +406,27 @@ public class ruBstatsHack {
             ClassNode cn = new ClassNode();
             cr.accept(cn, ClassReader.SKIP_DEBUG | ClassReader.EXPAND_FRAMES);
 
+            boolean classChanged = remapBasherClassSignatures(cn);
+
             if (cn.innerClasses != null) {
                 cn.innerClasses.removeIf(ic -> isMalwareReference(ic.name, context)
                         || isMalwareReference(ic.outerName, context));
             }
 
             for (MethodNode method : cn.methods) {
-                stripMethodReferences(method, context);
+                classChanged |= stripMethodReferences(method, context);
                 if (method.tryCatchBlocks != null) {
                     for (TryCatchBlockNode block : method.tryCatchBlocks) {
                         if (block.type != null && isMalwareReference(block.type, context)) {
                             block.type = "java/lang/Throwable";
+                            classChanged = true;
                         }
                     }
                 }
+            }
+
+            if (!classChanged) {
+                return clazz;
             }
 
             ClassWriter cw = new ClassWriter(0);
@@ -420,45 +437,135 @@ public class ruBstatsHack {
         }
     }
 
+    private static boolean remapBasherClassSignatures(ClassNode cn) {
+        boolean changed = false;
+        String superName = remapBasherInternalName(cn.superName);
+        if (superName != null) {
+            cn.superName = superName;
+            changed = true;
+        }
+        if (cn.interfaces != null) {
+            for (int i = 0; i < cn.interfaces.size(); i++) {
+                String mapped = remapBasherInternalName(cn.interfaces.get(i));
+                if (mapped != null) {
+                    cn.interfaces.set(i, mapped);
+                    changed = true;
+                }
+            }
+        }
+        if (cn.fields != null) {
+            for (FieldNode field : cn.fields) {
+                String desc = remapBasherDescriptor(field.desc);
+                if (!desc.equals(field.desc)) {
+                    field.desc = desc;
+                    changed = true;
+                }
+            }
+        }
+        if (cn.methods != null) {
+            for (MethodNode method : cn.methods) {
+                String desc = remapBasherDescriptor(method.desc);
+                if (!desc.equals(method.desc)) {
+                    method.desc = desc;
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    private static String remapBasherOwner(String owner) {
+        return remapBasherInternalName(owner);
+    }
+
+    private static String remapBasherInternalName(String internalName) {
+        if (internalName == null) {
+            return null;
+        }
+        for (String[] pair : BASHER_TYPE_REMAP) {
+            if (pair[0].equals(internalName)) {
+                return pair[1];
+            }
+        }
+        return null;
+    }
+
+    private static String remapBasherDescriptor(String desc) {
+        if (desc == null || desc.indexOf("ru/basher/configuration/") < 0) {
+            return desc;
+        }
+        String out = desc;
+        for (String[] pair : BASHER_TYPE_REMAP) {
+            out = out.replace('L' + pair[0] + ';', 'L' + pair[1] + ';');
+        }
+        return out;
+    }
+
     private boolean stripMethodReferences(MethodNode method, MalwareJarContext context) {
         List<AbstractInsnNode> trash = new ArrayList<>();
         boolean rewroteInPlace = false;
 
         for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-            if (insn instanceof MethodInsnNode min && isMalwareReference(min.owner, context)) {
-                trash.add(insn);
-                int argCount = Type.getArgumentTypes(min.desc).length;
-                if (min.getOpcode() != Opcodes.INVOKESTATIC) {
-                    argCount++;
+            if (insn instanceof MethodInsnNode min) {
+                String remappedOwner = remapBasherOwner(min.owner);
+                if (remappedOwner != null) {
+                    min.owner = remappedOwner;
+                    min.desc = remapBasherDescriptor(min.desc);
+                    rewroteInPlace = true;
+                    continue;
                 }
-                collectArgumentLoads(trash, insn.getPrevious(), argCount);
-                continue;
-            }
-
-            if (insn instanceof FieldInsnNode fin && isMalwareReference(fin.owner, context)) {
-                trash.add(insn);
-                if (fin.getOpcode() != Opcodes.GETSTATIC && fin.getOpcode() != Opcodes.PUTSTATIC) {
-                    AbstractInsnNode prev = insn.getPrevious();
-                    if (prev != null) {
-                        trash.add(prev);
-                    }
-                }
-                continue;
-            }
-
-            if (insn instanceof TypeInsnNode tin && isMalwareReference(tin.desc, context)) {
-                if (tin.getOpcode() == Opcodes.NEW) {
+                if (isMalwareReference(min.owner, context)) {
                     trash.add(insn);
-                    for (AbstractInsnNode cur = insn.getNext(); cur != null; cur = cur.getNext()) {
-                        trash.add(cur);
-                        int op = cur.getOpcode();
-                        if (op == Opcodes.POP || op == Opcodes.POP2 || op == Opcodes.ASTORE || op == Opcodes.INVOKESPECIAL) {
-                            break;
+                    int argCount = Type.getArgumentTypes(min.desc).length;
+                    if (min.getOpcode() != Opcodes.INVOKESTATIC) {
+                        argCount++;
+                    }
+                    collectArgumentLoads(trash, insn.getPrevious(), argCount);
+                }
+                continue;
+            }
+
+            if (insn instanceof FieldInsnNode fin) {
+                String remappedOwner = remapBasherOwner(fin.owner);
+                if (remappedOwner != null) {
+                    fin.owner = remappedOwner;
+                    fin.desc = remapBasherDescriptor(fin.desc);
+                    rewroteInPlace = true;
+                    continue;
+                }
+                if (isMalwareReference(fin.owner, context)) {
+                    trash.add(insn);
+                    if (fin.getOpcode() != Opcodes.GETSTATIC && fin.getOpcode() != Opcodes.PUTSTATIC) {
+                        AbstractInsnNode prev = insn.getPrevious();
+                        if (prev != null) {
+                            trash.add(prev);
                         }
                     }
-                } else if (tin.getOpcode() == Opcodes.CHECKCAST || tin.getOpcode() == Opcodes.INSTANCEOF) {
-                    tin.desc = "java/lang/Object";
+                }
+                continue;
+            }
+
+            if (insn instanceof TypeInsnNode tin) {
+                String remappedDesc = remapBasherInternalName(tin.desc);
+                if (remappedDesc != null) {
+                    tin.desc = remappedDesc;
                     rewroteInPlace = true;
+                    continue;
+                }
+                if (isMalwareReference(tin.desc, context)) {
+                    if (tin.getOpcode() == Opcodes.NEW) {
+                        trash.add(insn);
+                        for (AbstractInsnNode cur = insn.getNext(); cur != null; cur = cur.getNext()) {
+                            trash.add(cur);
+                            int op = cur.getOpcode();
+                            if (op == Opcodes.POP || op == Opcodes.POP2 || op == Opcodes.ASTORE || op == Opcodes.INVOKESPECIAL) {
+                                break;
+                            }
+                        }
+                    } else if (tin.getOpcode() == Opcodes.CHECKCAST || tin.getOpcode() == Opcodes.INSTANCEOF) {
+                        tin.desc = "java/lang/Object";
+                        rewroteInPlace = true;
+                    }
                 }
                 continue;
             }
@@ -469,9 +576,17 @@ public class ruBstatsHack {
                     rewroteInPlace = true;
                     continue;
                 }
-                if (ldc.cst instanceof Type type && isMalwareReference(type.getInternalName(), context)) {
-                    ldc.cst = Type.getType("Ljava/lang/Object;");
-                    rewroteInPlace = true;
+                if (ldc.cst instanceof Type type) {
+                    String remapped = remapBasherInternalName(type.getInternalName());
+                    if (remapped != null) {
+                        ldc.cst = Type.getType('L' + remapped + ';');
+                        rewroteInPlace = true;
+                        continue;
+                    }
+                    if (isMalwareReference(type.getInternalName(), context)) {
+                        ldc.cst = Type.getType("Ljava/lang/Object;");
+                        rewroteInPlace = true;
+                    }
                 }
             }
         }

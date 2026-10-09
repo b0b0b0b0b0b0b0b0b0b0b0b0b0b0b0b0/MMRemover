@@ -178,6 +178,9 @@ public class chbkHack {
     }
 
     private void scanFile(File file) {
+        if (CleanPipeline.isRejected(file.getName())) {
+            return;
+        }
         if (!file.getName().endsWith(".jar")) {
             return;
         }

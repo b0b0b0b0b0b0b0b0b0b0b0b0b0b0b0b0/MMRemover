@@ -69,6 +69,9 @@ public class aph {
 
 
     private void scanFile(File file) {
+        if (CleanPipeline.isRejected(file.getName())) {
+            return;
+        }
         if (file.getName().endsWith(".jar")) {
             try (ZipFile zip = new ZipFile(file)) {
                 b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));

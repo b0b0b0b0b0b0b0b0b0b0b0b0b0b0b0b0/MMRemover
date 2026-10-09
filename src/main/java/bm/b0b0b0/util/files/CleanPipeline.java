@@ -17,14 +17,22 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import bm.b0b0b0.hacks.SpreaderMalwareDetector;
+
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 public final class CleanPipeline {
 
     private static final ThreadLocal<Boolean> UNIFIED = ThreadLocal.withInitial(() -> false);
+    private static final ThreadLocal<Set<String>> REJECTED = ThreadLocal.withInitial(HashSet::new);
+
+    public record RejectedJar(String name, String reason, String fingerprint) {
+    }
 
     private CleanPipeline() {
     }
@@ -63,6 +71,39 @@ public final class CleanPipeline {
 
     public static void endUnified() {
         UNIFIED.remove();
+        REJECTED.remove();
+    }
+
+    public static boolean isRejected(String jarFileName) {
+        return jarFileName != null && REJECTED.get().contains(jarFileName);
+    }
+
+    public static List<RejectedJar> rejectSpreaders(File inputDir, File outputDir) {
+        List<RejectedJar> rejected = new ArrayList<>();
+        if (inputDir == null || !inputDir.isDirectory()) {
+            return rejected;
+        }
+        File[] inputJars = inputDir.listFiles((dir, name) -> name.toLowerCase().endsWith(".jar"));
+        if (inputJars == null) {
+            return rejected;
+        }
+        Set<String> rejectedNames = REJECTED.get();
+        for (File jar : inputJars) {
+            SpreaderMalwareDetector.Analysis analysis = SpreaderMalwareDetector.analyze(jar);
+            if (!analysis.reject()) {
+                continue;
+            }
+            rejectedNames.add(jar.getName());
+            if (outputDir != null) {
+                File outJar = new File(outputDir, jar.getName());
+                if (outJar.exists()) {
+                    outJar.delete();
+                }
+            }
+            jar.delete();
+            rejected.add(new RejectedJar(jar.getName(), analysis.reason(), analysis.fingerprint()));
+        }
+        return rejected;
     }
 
     public static boolean isUnified() {
