@@ -1,4 +1,4 @@
-configVersion: 22
+configVersion: 23
 lang: "ru"
 ru:
   removeHostflowButton: "Удалить Hostflow"
@@ -38,6 +38,7 @@ ru:
   dangerDeleteStage1: "<html><div style='width:430px'>Это действие удалит <span style='color:#E57373;font-weight:bold'>ВСЕ файлы</span> с диска из папки:<br><b>%s</b><br><br>Удаляются настоящие файлы на диске, а не только строки в списке. Это <b>не</b> «очистить список».</div></html>"
   dangerDeleteStage2: "<html><div style='width:430px'>Бэкапов <span style='color:#E57373;font-weight:bold'>нет</span>. После удаления восстановить плагины средствами программы будет невозможно.<br><br>Папка: <b>%s</b></div></html>"
   dangerDeleteStage3: "<html><div style='width:430px'>После подтверждения файлы в папке<br><b>%s</b><br>будут <span style='color:#E57373;font-weight:bold'>удалены немедленно и безвозвратно</span>.<br><br>Нажимайте, только если полностью уверены.</div></html>"
+  dangerDeleteFile: "<html><div style='width:430px'>Удалить файл<br><b>%s</b><br>с диска?<br><br>Файл будет <span style='color:#E57373;font-weight:bold'>удалён безвозвратно</span>, это действие нельзя отменить.</div></html>"
   openBackupsButton: "Открыть папку бэкапов"
   backupLoadingTitle: "Создание бекапа папки…"
   backupStart: "Создание бэкапа папки: %s"
@@ -256,6 +257,7 @@ en:
   dangerDeleteStage1: "<html><div style='width:430px'>This will delete <span style='color:#E57373;font-weight:bold'>ALL files</span> from disk in the folder:<br><b>%s</b><br><br>It removes real files on disk, not just rows in the list. This is <b>not</b> \"clear the list\".</div></html>"
   dangerDeleteStage2: "<html><div style='width:430px'>There are <span style='color:#E57373;font-weight:bold'>no backups</span>. Once deleted, the program cannot restore these plugins.<br><br>Folder: <b>%s</b></div></html>"
   dangerDeleteStage3: "<html><div style='width:430px'>After you confirm, the files in<br><b>%s</b><br>will be <span style='color:#E57373;font-weight:bold'>deleted immediately and permanently</span>.<br><br>Only proceed if you are absolutely sure.</div></html>"
+  dangerDeleteFile: "<html><div style='width:430px'>Delete the file<br><b>%s</b><br>from disk?<br><br>It will be <span style='color:#E57373;font-weight:bold'>permanently deleted</span> and this cannot be undone.</div></html>"
   openBackupsButton: "Open backups folder"
   backupLoadingTitle: "Creating folder backup…"
   backupStart: "Creating folder backup: %s"

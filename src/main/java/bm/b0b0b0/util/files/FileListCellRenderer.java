@@ -53,7 +53,7 @@ public class FileListCellRenderer extends DefaultListCellRenderer {
             label.setBackground(null);
             panel.add(label, BorderLayout.CENTER);
 
-            JLabel deleteIcon = new JLabel(UIManagerUtil.getTrashIcon(14));
+            JLabel deleteIcon = new JLabel(UIManagerUtil.getBinIcon(14));
             deleteIcon.setToolTipText(conf.getTranslation("deleteSelectedFileTooltip"));
             deleteIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
             panel.add(deleteIcon, BorderLayout.EAST);

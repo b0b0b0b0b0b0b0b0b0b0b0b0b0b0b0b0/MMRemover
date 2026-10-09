@@ -1,6 +1,7 @@
 package bm.b0b0b0.util.files;
 
 import bm.b0b0b0.util.gui.Conf;
+import bm.b0b0b0.util.gui.ConfirmDeleteDialog;
 import bm.b0b0b0.util.gui.UIManagerUtil;
 
 import javax.swing.*;
@@ -65,20 +66,9 @@ public final class FileListInteraction {
     }
 
     private static boolean confirmDelete(Window parent, Conf conf, String fileName) {
-        Object[] options = {
-                conf.getTranslation("confirmYes"),
-                conf.getTranslation("confirmNo")
-        };
-        int option = JOptionPane.showOptionDialog(
-                parent,
-                String.format(conf.getTranslation("confirmDeleteFile"), fileName),
-                conf.getTranslation("confirmActionTitle"),
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE,
-                null,
-                options,
-                options[0]
-        );
-        return option == JOptionPane.YES_OPTION;
+        return ConfirmDeleteDialog.show(
+                parent, conf,
+                String.format(conf.getTranslation("dangerDeleteFile"), fileName),
+                10);
     }
 }
