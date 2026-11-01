@@ -35,28 +35,67 @@
 
 ## KtoDropper — «метрика» `lib/metrics/Boot`
 
-Притворяется метрикой. В jar кладут три класса `lib/metrics/Boot*` и блоб `META-INF/m.bin`. Это не конфиг плагина и не адрес Minecraft-сервера. В `<clinit>` главного класса, прямо перед `return`, дописан вызов:
+Притворяется метрикой. Один и тот же дроппер вшит в каждый jar папки `plugins`. Какой плагин загрузится первым, тот и поднимает агента. Остальные видят `kto.started=1` и молчат. Вычистить один jar мало: чистится вся папка, потом рестарт.
+
+### Что лежит в jar
+
+- `lib/metrics/Boot.class`, `Boot$1.class` (поток), `Boot$MemLoader.class`. Пакет могут переименовать, состав тот же.
+- `META-INF/m.bin`. Это не конфиг плагина и не адрес Minecraft-сервера. IP в jar открытым текстом нет.
+- В `<clinit>` класса плагина, сразу перед `return`:
 
 ```
 invokestatic lib/metrics/Boot.start()V
 ```
 
-`Boot` в фоне читает блоб, расшифровывает (SHA-256 от `K7m2Qp9x` + `R4t8Vb1n` + `L6s3Wz5c` и первых 16 байт файла, дальше AES-GCM) и кладёт в system properties `kto.host`, `kto.port`, `kto.token`. Потом качает второй jar и поднимает `kto.Core` своим classloader'ом прямо в памяти. На этой пачке расшифровка одна и та же: `https://kto.ultimatebox.fun/core.jar`, хост **`202.181.188.121`**, порт **`20011`**, метка `ServerCore`.
+На пачке из 91 jar заражены 90, чистый только `DeadDontCrystall-1.jar`. Хеш `Boot.class` у всех один. `m.bin` у каждого jar свой. Пустых NMS, как у SystemMetrics, нет.
 
-Имя класса не зашито. Чистилка узнаёт дроппер по строкам `kto.host` / `kto.port` / `kto.token` / `kto.embedded` / `kto.started` / `kto.boot` / `kto.Core`. Если строки переименуют, срабатывает другая ветка: в **одном** классе вместе лежат `META-INF/m.bin`, `AES/GCM`, `HttpURLConnection` и `Class.forName` или `defineClass`. Имя берётся из самого class-файла, вызов `start()V` этого класса затирается.
+### Что делает `Boot.start()`
 
-Сам вызов — три байта `invokestatic`, стек не трогает. На их место ставятся три `nop`. Остальной `<clinit>` не переписывается: у WorldEdit остаётся `LogManagerCompat.getLogger()`, у ProtocolLib его `ReportType`, у LPX свой DES. Класс целиком через ASM не гоняется, иначе большой плагин можно убить фреймами.
+1. `AtomicBoolean`: в этой JVM повторно не стартует. Демон-тред с именем `metrics-worker` зовёт `load()`.
+2. Выход, если свойство `kto.started` уже `1`.
+3. Читает `META-INF/m.bin`. Короче 40 байт — выход.
+4. Ключ: SHA-256 от UTF-8 `K7m2Qp9x` + `R4t8Vb1n` + `L6s3Wz5c` и первых 16 байт блоба. `AES/GCM/NoPadding`, тег 128 бит, IV = байты 16–28, шифртекст с 28-го байта.
+5. Расшифровка — пять строк через `\n`: URL, хост, порт, токен, метка. Метку сам `Boot` не читает. Порт обязан быть 1–65535, URL и хост не пустые.
+6. Под локом на `System.getProperties`. Уже стоит `kto.boot=1` — другой плагин качает, выход. Иначе ставит `kto.boot=1`.
+7. Качает URL, 3 попытки. Пауза 4 с, потом 7 с. Годится `file:` и HTTP: таймауты 20/60 с, редиректы включены, юзер-агент Chrome 124, берёт только ответ 2xx. Потолок 64 МБ. Коротже 4096 байт — выкинуть.
+8. Jar распаковывается в память. На диск `core.jar` не пишется. Нет записи `kto/Core.class` — выход.
+9. Пишет свойства `kto.host`, `kto.port`, `kto.token`, `kto.embedded=1`.
+10. `MemLoader` делает `defineClass` из этих байт. `Class.forName("kto.Core")`, потом `start()`, а если метода нет — `main(String[])`.
+11. `kto.started` ставит уже `kto.Core`. Не поставил — `Boot` снимает `kto.boot`, и следующий заражённый плагин в той же JVM пробует снова.
+
+На этой пачке в блобе: `https://kto.ultimatebox.fun/core.jar`, хост `202.181.188.121`, порт `20011`, метка `ServerCore`. Панель ту же метку пишет в `pluginName`, агентов принимает на `20011`, сама висит на `8080`.
+
+`kto.Core` в jar нет. Это второй этап, только в куче процесса. Шелл, архив Telegram и запись `authorized_keys` в байтах `Boot` не лежат: это команды панели уже подключённому агенту.
+
+### Пока агент ещё не сел
+
+| След | Где смотреть |
+|------|----------------|
+| `META-INF/m.bin` | запись внутри jar |
+| `kto.host`, `kto.port`, `kto.token`, `kto.embedded`, `kto.started`, `kto.boot`, `kto.Core` | строки класса дроппера |
+| в одном классе вместе `META-INF/m.bin`, `AES/GCM`, `HttpURLConnection` и `defineClass` или `Class.forName` | тот же класс, если строки переименуют |
+| `invokestatic …start()V` в конце `<clinit>` | класс плагина |
+| тред `metrics-worker` | дамп потоков живого сервера |
+| свойства `kto.host` / `kto.port` / `kto.token` / `kto.embedded` / `kto.boot` / `kto.started` | `jcmd <pid> VM.system_properties` |
+| исходящий TCP на `202.181.188.121:20011` | `ss -tpn`, tcpdump |
+| GET `https://kto.ultimatebox.fun/core.jar`, юзер-агент Chrome | тот же tcpdump |
+
+Рестарт без чистки jar поднимает дроппер заново. Чистка без рестарта оставляет `kto.Core` в памяти до остановки `java`.
+
+Резать на DNS и файрволе: `kto.ultimatebox.fun`, `202.181.188.121`, порт `20011`.
+
+### Что чистит MMRemover
+
+Имя класса не зашито. Дроппер узнаётся по строкам `kto.*` выше. Вторая ветка — структурная, из той же таблицы. Имя берётся из самого class-файла, вызов `start()V` этого класса затирается.
+
+Вызов — три байта `invokestatic`, стек не трогает. На их место три `nop`. Остальной `<clinit>` не переписывается: у WorldEdit остаётся `LogManagerCompat.getLogger()`, у ProtocolLib его `ReportType`, у LPX свой DES. Класс целиком через ASM не гоняется, иначе большой плагин можно убить фреймами.
 
 | Что | MMRemover |
 |-----|-----------|
 | `META-INF/m.bin` и классы дроппера (`Boot` и `Boot$…`, как бы пакет ни назвали) | удаляет |
-| `invokestatic …start()V` в `<clinit>` | три `nop`, остальной метод на месте |
+| `invokestatic …start()V` | три `nop`, остальной метод на месте |
 | Чужой шифр рядом (LPX, NormalSpit) | не трогает |
 | Метод назвали не `start` или у вызова появились аргументы | jar не переписывает, в логе `ktoDropperUnsafe` |
-
-На пачке из 91 jar заражены 90. Чистый только `DeadDontCrystall-1.jar`. Пустых NMS, как у SystemMetrics, тут нет: после вырезки плагин остаётся тем же плагином.
-
-Резать на хостинге/DNS: **`kto.ultimatebox.fun`** и **`202.181.188.121`**.
 
 ## ru/bstats — малварь `api-bstats.online` (adod_bstats)
 
