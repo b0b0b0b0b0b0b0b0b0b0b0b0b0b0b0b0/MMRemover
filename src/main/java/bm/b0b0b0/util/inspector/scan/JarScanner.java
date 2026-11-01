@@ -1,6 +1,7 @@
 package bm.b0b0b0.util.inspector.scan;
 
 import bm.b0b0b0.hacks.FakeBstatsMalwareDetector;
+import bm.b0b0b0.hacks.KtoDropperMalwareDetector;
 import bm.b0b0b0.hacks.SpreaderMalwareDetector;
 import bm.b0b0b0.util.inspector.model.InspectionReport;
 
@@ -81,7 +82,25 @@ public final class JarScanner {
 
         applyMalwareAnalysis(entryNames, classFiles, report);
         applySpreaderAnalysis(jarFile, entryNames, report);
+        applyKtoAnalysis(entryNames, classFiles, report);
         return report;
+    }
+
+    private static void applyKtoAnalysis(List<String> entryNames,
+                                         List<byte[]> classFiles,
+                                         InspectionReport report) {
+        KtoDropperMalwareDetector.Analysis analysis =
+                KtoDropperMalwareDetector.analyze(entryNames, classFiles);
+        if (!analysis.infected()) {
+            return;
+        }
+        report.malwareDetected = true;
+        if (report.malwareReason == null || report.malwareReason.isBlank()) {
+            report.malwareReason = analysis.reason();
+        } else {
+            report.malwareReason = analysis.reason() + "; " + report.malwareReason;
+        }
+        report.malwareRoots.addAll(analysis.roots());
     }
 
     private static void applySpreaderAnalysis(File jarFile,

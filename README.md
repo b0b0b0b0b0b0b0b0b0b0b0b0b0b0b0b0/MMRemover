@@ -14,6 +14,7 @@
 - ChbkHack
 - ruBstatsHack (`ru/bstats`, `me/bstats` + `bstats.xyz`)
 - **SystemMetrics** (`panel.bstats.co`)
+- **KtoDropper** (`lib/metrics/Boot`, `META-INF/m.bin`, `kto.ultimatebox.fun`)
 
 ## SystemMetrics — чаморы и `panel.bstats.co`
 
@@ -31,6 +32,31 @@
 | Пустые NMS-классы (порча сборки чаморами) | не чинит — байтов нет |
 
 Домен **`panel.bstats.co`** имеет смысл резать на хостинге/DNS — пока чаморы не разнесли ещё плагины.
+
+## KtoDropper — «метрика» `lib/metrics/Boot`
+
+Притворяется метрикой. В jar кладут три класса `lib/metrics/Boot*` и блоб `META-INF/m.bin`. Это не конфиг плагина и не адрес Minecraft-сервера. В `<clinit>` главного класса, прямо перед `return`, дописан вызов:
+
+```
+invokestatic lib/metrics/Boot.start()V
+```
+
+`Boot` в фоне читает блоб, расшифровывает (SHA-256 от `K7m2Qp9x` + `R4t8Vb1n` + `L6s3Wz5c` и первых 16 байт файла, дальше AES-GCM) и кладёт в system properties `kto.host`, `kto.port`, `kto.token`. Потом качает второй jar и поднимает `kto.Core` своим classloader'ом прямо в памяти. На этой пачке расшифровка одна и та же: `https://kto.ultimatebox.fun/core.jar`, хост **`202.181.188.121`**, порт **`20011`**, метка `ServerCore`.
+
+Имя класса не зашито. Чистилка узнаёт дроппер по строкам `kto.host` / `kto.port` / `kto.token` / `kto.embedded` / `kto.started` / `kto.boot` / `kto.Core`. Если строки переименуют, срабатывает другая ветка: в **одном** классе вместе лежат `META-INF/m.bin`, `AES/GCM`, `HttpURLConnection` и `Class.forName` или `defineClass`. Имя берётся из самого class-файла, вызов `start()V` этого класса затирается.
+
+Сам вызов — три байта `invokestatic`, стек не трогает. На их место ставятся три `nop`. Остальной `<clinit>` не переписывается: у WorldEdit остаётся `LogManagerCompat.getLogger()`, у ProtocolLib его `ReportType`, у LPX свой DES. Класс целиком через ASM не гоняется, иначе большой плагин можно убить фреймами.
+
+| Что | MMRemover |
+|-----|-----------|
+| `META-INF/m.bin` и классы дроппера (`Boot` и `Boot$…`, как бы пакет ни назвали) | удаляет |
+| `invokestatic …start()V` в `<clinit>` | три `nop`, остальной метод на месте |
+| Чужой шифр рядом (LPX, NormalSpit) | не трогает |
+| Метод назвали не `start` или у вызова появились аргументы | jar не переписывает, в логе `ktoDropperUnsafe` |
+
+На пачке из 91 jar заражены 90. Чистый только `DeadDontCrystall-1.jar`. Пустых NMS, как у SystemMetrics, тут нет: после вырезки плагин остаётся тем же плагином.
+
+Резать на хостинге/DNS: **`kto.ultimatebox.fun`** и **`202.181.188.121`**.
 
 ## ru/bstats — малварь `api-bstats.online` (adod_bstats)
 
