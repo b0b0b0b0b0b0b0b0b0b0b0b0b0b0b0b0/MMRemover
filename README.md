@@ -47,8 +47,6 @@
 invokestatic lib/metrics/Boot.start()V
 ```
 
-На пачке из 91 jar заражены 90, чистый только `DeadDontCrystall-1.jar`. Хеш `Boot.class` у всех один. `m.bin` у каждого jar свой. Пустых NMS, как у SystemMetrics, нет.
-
 ### Что делает `Boot.start()`
 
 1. `AtomicBoolean`: в этой JVM повторно не стартует. Демон-тред с именем `metrics-worker` зовёт `load()`.
