@@ -11,9 +11,9 @@ import java.awt.*;
 import java.util.Objects;
 
 public final class UpdateDialog extends JDialog {
-    private static final Color COLOR_BG = Color.decode("#3c3f41");
-    private static final Color COLOR_TEXT = new Color(0xEBEBEB);
-    private static final Color COLOR_MUTED = new Color(0xA8A8A8);
+    private static final Color COLOR_BG = UIManager.getColor("Panel.background");
+    private static final Color COLOR_TEXT = UIManager.getColor("Label.foreground");
+    private static final Color COLOR_MUTED = MMRemoverTheme.mutedForeground();
 
     private UpdateDialog(Window parent, Conf conf, UpdateInfo update) {
         super(parent, conf.getTranslation("updateAvailableTitle"), ModalityType.MODELESS);
@@ -75,12 +75,12 @@ public final class UpdateDialog extends JDialog {
             body.setWrapStyleWord(true);
             body.setFont(new Font("Segoe UI", Font.PLAIN, 13));
             body.setForeground(COLOR_TEXT);
-            body.setBackground(new Color(0x2B2D30));
+            body.setBackground(MMRemoverTheme.cardBackground());
             body.setBorder(new EmptyBorder(12, 12, 12, 12));
             body.setCaretPosition(0);
 
             JScrollPane scroll = new JScrollPane(body);
-            scroll.setBorder(BorderFactory.createLineBorder(new Color(0x258e66)));
+            scroll.setBorder(new com.formdev.flatlaf.ui.FlatLineBorder(new Insets(0, 0, 0, 0), MMRemoverTheme.cardBorderColor(), 1, 10));
             scroll.setPreferredSize(new Dimension(380, 120));
             root.add(scroll, BorderLayout.CENTER);
         }

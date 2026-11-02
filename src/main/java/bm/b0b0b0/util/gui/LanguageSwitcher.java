@@ -2,14 +2,11 @@ package bm.b0b0b0.util.gui;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.util.Objects;
 
 public final class LanguageSwitcher {
-    private static final Color HOVER_BG = new Color(0x46494B);
     private static final int FLAG_SIZE = 16;
-    private static final int BUTTON_SIZE = 26;
+    private static final int BUTTON_SIZE = 34;
 
     private LanguageSwitcher() {
     }
@@ -24,39 +21,19 @@ public final class LanguageSwitcher {
         };
 
         LangItem current = findItem(items, conf.getLang());
-        JButton button = new JButton(loadFlagIcon(current.iconPath()));
+        JButton button = new TipButton(loadFlagIcon(current.iconPath()));
         button.setToolTipText(current.label() + " — " + conf.getTranslation("languageSwitcherTooltip"));
-        button.setFocusPainted(false);
-        button.setBorderPainted(false);
-        button.setContentAreaFilled(false);
-        button.setOpaque(false);
-        button.setMargin(new Insets(0, 0, 0, 0));
+        button.setFocusable(false);
         button.setPreferredSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        button.setMinimumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
-        button.setMaximumSize(new Dimension(BUTTON_SIZE, BUTTON_SIZE));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
-        button.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                button.setOpaque(true);
-                button.setBackground(HOVER_BG);
-            }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                button.setOpaque(false);
-                button.setBackground(null);
-            }
-        });
+        button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.putClientProperty("FlatLaf.style", "arc: 8");
 
         JPopupMenu menu = new JPopupMenu();
-        menu.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
         for (LangItem item : items) {
             JMenuItem menuItem = new JMenuItem(item.label(), loadFlagIcon(item.iconPath()));
-            menuItem.setIconTextGap(8);
-            menuItem.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 10));
+            menuItem.setIconTextGap(10);
             menuItem.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             menuItem.addActionListener(e -> {
                 if (!item.code().equals(conf.getLang())) {

@@ -7,89 +7,61 @@ public class StyledButton {
 
     public enum Style {
         PRIMARY,
-        SECONDARY
+        SECONDARY,
+        DANGER
     }
+
+    private static final String PRIMARY_STYLE = "background: #10b866;"
+            + "foreground: #ffffff;"
+            + "hoverBackground: #14c973;"
+            + "pressedBackground: #0ea65c;"
+            + "borderWidth: 0;";
+
+    private static final String SECONDARY_STYLE = "background: #26292e;"
+            + "foreground: #e3e5e8;"
+            + "hoverBackground: #2f3238;"
+            + "pressedBackground: #373a41;"
+            + "borderColor: #33363c;"
+            + "hoverBorderColor: #3d4148;";
+
+    private static final String DANGER_STYLE = "background: #b8323d;"
+            + "foreground: #ffffff;"
+            + "hoverBackground: #cc3a46;"
+            + "pressedBackground: #a02a34;"
+            + "borderWidth: 0;"
+            + "disabledBackground: #3a2427;";
 
     public static JButton createModernButton(String text, Icon icon) {
         return createModernButton(text, icon, Style.PRIMARY);
     }
 
     public static JButton createModernButton(String text, Icon icon, Style style) {
-        JButton button = icon != null ? new JButton(text, icon) : new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        button.setFocusPainted(false);
+        JButton button = icon != null ? new TipButton(text, icon) : new TipButton(text);
         button.setFocusable(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.setPreferredSize(new Dimension(icon != null ? 210 : 172, 36));
-        button.putClientProperty("JButton.buttonType", "roundRect");
-        button.putClientProperty("JComponent.focusWidth", 0);
-        button.putClientProperty("JComponent.outline", null);
-        button.putClientProperty("JComponent.minimumWidth", 168);
-
         if (icon != null) {
             button.setIconTextGap(8);
-            button.setHorizontalTextPosition(SwingConstants.RIGHT);
         }
-
-        String commonStyle = "arc: 6; focusWidth: 0;";
-
-        if (style == Style.PRIMARY) {
-            button.putClientProperty("FlatLaf.style", commonStyle
-                    + "background: #09b55d;"
-                    + "foreground: #FFFFFF;"
-                    + "hoverBackground: #0bc266;"
-                    + "pressedBackground: #08a052;"
-                    + "focusedBackground: #09b55d;"
-                    + "disabledBackground: #3c3f41;"
-                    + "disabledText: #8a8a8a;");
-        } else {
-            button.putClientProperty("FlatLaf.style", commonStyle
-                    + "background: #4a4d50;"
-                    + "foreground: #ebebeb;"
-                    + "hoverBackground: #565a5e;"
-                    + "pressedBackground: #3e4144;"
-                    + "focusedBackground: #4a4d50;"
-                    + "disabledBackground: #3c3f41;"
-                    + "disabledText: #8a8a8a;");
-        }
-
+        button.putClientProperty("FlatLaf.style", "arc: 10; margin: 7,16,7,16;"
+                + (style == Style.PRIMARY ? "font: bold;" : "")
+                + styleFor(style));
         return button;
     }
 
     public static JButton createModernIconButton(Icon icon, Style style, String tooltip) {
-        JButton button = new JButton(icon);
+        JButton button = new TipButton(icon);
         button.setToolTipText(tooltip);
-        button.setFocusPainted(false);
         button.setFocusable(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.setPreferredSize(new Dimension(36, 36));
-        button.putClientProperty("JButton.buttonType", "roundRect");
-        button.putClientProperty("JComponent.focusWidth", 0);
-        button.putClientProperty("JComponent.outline", null);
-        button.putClientProperty("JComponent.minimumWidth", 36);
-
-        String commonStyle = "arc: 6; focusWidth: 0;";
-
-        if (style == Style.PRIMARY) {
-            button.putClientProperty("FlatLaf.style", commonStyle
-                    + "background: #09b55d;"
-                    + "foreground: #FFFFFF;"
-                    + "hoverBackground: #0bc266;"
-                    + "pressedBackground: #08a052;"
-                    + "focusedBackground: #09b55d;"
-                    + "disabledBackground: #3c3f41;"
-                    + "disabledText: #8a8a8a;");
-        } else {
-            button.putClientProperty("FlatLaf.style", commonStyle
-                    + "background: #4a4d50;"
-                    + "foreground: #ebebeb;"
-                    + "hoverBackground: #565a5e;"
-                    + "pressedBackground: #3e4144;"
-                    + "focusedBackground: #4a4d50;"
-                    + "disabledBackground: #3c3f41;"
-                    + "disabledText: #8a8a8a;");
-        }
-
+        button.putClientProperty("FlatLaf.style", "arc: 10; margin: 7,9,7,9;" + styleFor(style));
         return button;
+    }
+
+    private static String styleFor(Style style) {
+        return switch (style) {
+            case PRIMARY -> PRIMARY_STYLE;
+            case SECONDARY -> SECONDARY_STYLE;
+            case DANGER -> DANGER_STYLE;
+        };
     }
 }

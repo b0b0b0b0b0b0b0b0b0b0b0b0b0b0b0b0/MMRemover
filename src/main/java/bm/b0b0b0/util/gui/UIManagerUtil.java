@@ -1,66 +1,56 @@
 package bm.b0b0b0.util.gui;
 
+import com.formdev.flatlaf.extras.FlatSVGIcon;
+import com.formdev.flatlaf.ui.FlatLineBorder;
+
 import javax.swing.*;
-import javax.swing.border.Border;
-import javax.swing.border.TitledBorder;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
-import java.awt.geom.RoundRectangle2D;
-import java.awt.image.BufferedImage;
-import java.net.URL;
+import java.util.function.Supplier;
 
 public class UIManagerUtil {
-    private static final Color PANEL_BORDER_COLOR = new Color(0x258e66);
-    private static final int PANEL_BORDER_RADIUS = 10;
-    private static final String REFRESH_ICON_PATH = "/icons/reload.png";
-    private static final String BROOM_ICON_PATH = "/icons/broom.png";
-    private static final String ERASER_ICON_PATH = "/icons/eraser.png";
-    private static final String JAR_FILE_ICON_PATH = "/icons/jar-file.png";
-    private static final Color ICON_ENABLED_COLOR = new Color(0xEBEBEB);
-    private static final Color ICON_DISABLED_COLOR = new Color(0x888888);
-    private static final Color CLEAR_ICON_ENABLED_COLOR = new Color(0xE57373);
-    private static final Color PRIMARY_ICON_ENABLED_COLOR = new Color(0x0A2E1C);
+    private static final String SVG_ICON_DIR = "icons/svg/";
+    private static final int CARD_ARC = 14;
     public static final String PANEL_TITLE_LABEL_KEY = "mmremover.panelTitleLabel";
+    public static final String PANEL_COUNT_LABEL_KEY = "mmremover.panelCountLabel";
     public static final String LIST_HOVERED_INDEX_KEY = "mmremover.listHoveredIndex";
     public static final String LIST_DIRECTORY_PATH_KEY = "mmremover.listDirectoryPath";
     public static final int LIST_DELETE_ZONE_WIDTH = 36;
-    public static final Color LIST_ITEM_HOVER_BACKGROUND = new Color(0x46494B);
-    public static JButton createStyledButton(String text, Icon icon) {
-        JButton button = new JButton(text, icon);
-        button.setFont(new Font("Arial", Font.BOLD, 12));
-        button.setForeground(Color.WHITE);
-        button.setBackground(new Color(46, 139, 87));
-        button.setFocusPainted(false);
-        button.setContentAreaFilled(true);
-        button.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseEntered(MouseEvent e) {
-                button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            }
-            @Override
-            public void mouseExited(MouseEvent e) {
-                button.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
-            }
-        });
 
-        return button;
+    public static Icon svgIcon(String name, int size, Supplier<Color> tint) {
+        FlatSVGIcon icon = new FlatSVGIcon(SVG_ICON_DIR + name + ".svg", size, size);
+        icon.setColorFilter(new FlatSVGIcon.ColorFilter(color -> {
+            Color target = tint.get();
+            if (target == null) {
+                return color;
+            }
+            return new Color(target.getRed(), target.getGreen(), target.getBlue(),
+                    color.getAlpha() * target.getAlpha() / 255);
+        }));
+        return icon;
+    }
+
+    private static Icon neutralIcon(String name, int size) {
+        return svgIcon(name, size, () -> UIManager.getColor("MMRemover.iconColor"));
+    }
+
+    private static Icon dangerIcon(String name, int size) {
+        return svgIcon(name, size, MMRemoverTheme::dangerColor);
     }
 
     public static void enableListItemHover(JList<?> list) {
-        list.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         MouseMotionAdapter motionAdapter = new MouseMotionAdapter() {
             @Override
             public void mouseMoved(MouseEvent e) {
-                updateListHoveredIndex(list, list.locationToIndex(e.getPoint()));
+                updateListHoveredIndex(list, rowAt(list, e.getPoint()));
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                updateListHoveredIndex(list, list.locationToIndex(e.getPoint()));
+                updateListHoveredIndex(list, rowAt(list, e.getPoint()));
             }
         };
         list.addMouseMotionListener(motionAdapter);
@@ -70,6 +60,17 @@ public class UIManagerUtil {
                 updateListHoveredIndex(list, -1);
             }
         });
+    }
+
+    private static int rowAt(JList<?> list, Point point) {
+        int index = list.locationToIndex(point);
+        if (index < 0) {
+            return -1;
+        }
+        Rectangle bounds = list.getCellBounds(index, index);
+        boolean inside = bounds != null && bounds.contains(point);
+        list.setCursor(Cursor.getPredefinedCursor(inside ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
+        return inside ? index : -1;
     }
 
     private static void updateListHoveredIndex(JList<?> list, int newIndex) {
@@ -102,183 +103,79 @@ public class UIManagerUtil {
         }
     }
 
+    /**
+     * Список файлов, который показывает подсказку, пока он пуст.
+     */
+    public static JList<String> createFileList(String emptyHint) {
+        JList<String> list = new JList<>() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getModel().getSize() == 0 && emptyHint != null) {
+                    paintEmptyHint(this, (Graphics2D) g, emptyHint);
+                }
+            }
+        };
+        list.setBorder(new EmptyBorder(2, 4, 4, 4));
+        list.setFixedCellHeight(38);
+        return list;
+    }
+
+    private static void paintEmptyHint(JComponent c, Graphics2D g, String text) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        Icon icon = svgIcon("upload", 28, MMRemoverTheme::mutedForeground);
+        FontMetrics fm = g2.getFontMetrics(c.getFont());
+        int textWidth = fm.stringWidth(text);
+        int blockHeight = icon.getIconHeight() + 10 + fm.getHeight();
+        int top = Math.max(8, (c.getHeight() - blockHeight) / 2);
+        icon.paintIcon(c, g2, (c.getWidth() - icon.getIconWidth()) / 2, top);
+        g2.setFont(c.getFont());
+        g2.setColor(MMRemoverTheme.mutedForeground());
+        g2.drawString(text, (c.getWidth() - textWidth) / 2, top + icon.getIconHeight() + 10 + fm.getAscent());
+        g2.dispose();
+    }
+
     public static JButton createIconButton(Icon icon, String tooltip) {
-        JButton button = new JButton(icon);
+        JButton button = new TipButton(icon);
         button.setToolTipText(tooltip);
-        button.setFocusPainted(false);
-        button.setBorderPainted(false);
-        button.setContentAreaFilled(false);
-        button.setOpaque(false);
-        button.setMargin(new Insets(2, 4, 2, 4));
+        button.setFocusable(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.putClientProperty("FlatLaf.style", "arc: 8; margin: 5,5,5,5");
         return button;
     }
 
     public static Icon getRefreshIcon() {
-        return getRefreshIcon(18);
+        return getRefreshIcon(16);
     }
 
     public static Icon getRefreshIcon(int size) {
-        Icon resourceIcon = createTintedResourceIcon(
-                REFRESH_ICON_PATH, size, ICON_ENABLED_COLOR, ICON_DISABLED_COLOR);
-        if (resourceIcon != null) {
-            return resourceIcon;
-        }
-        return createDrawnRefreshIcon(size);
+        return neutralIcon("refresh", size);
     }
 
     public static Icon getEraserIcon() {
-        return getEraserIcon(22);
+        return getEraserIcon(16);
     }
 
     public static Icon getEraserIcon(int size) {
-        Icon resourceIcon = createTintedResourceIcon(
-                ERASER_ICON_PATH, size, PRIMARY_ICON_ENABLED_COLOR, ICON_DISABLED_COLOR);
-        if (resourceIcon != null) {
-            return resourceIcon;
-        }
-        return null;
+        return svgIcon("sparkles", size, () -> Color.WHITE);
     }
 
     public static Icon getJarFileIcon() {
-        return getJarFileIcon(20);
+        return getJarFileIcon(18);
     }
 
     public static Icon getJarFileIcon(int size) {
-        Icon resourceIcon = createTintedResourceIcon(
-                JAR_FILE_ICON_PATH, size, ICON_ENABLED_COLOR, ICON_DISABLED_COLOR);
-        if (resourceIcon != null) {
-            return resourceIcon;
-        }
-        return UIManager.getIcon("FileView.fileIcon");
+        return svgIcon("package", size, () -> UIManager.getColor("MMRemover.jarIconColor"));
     }
 
     public static Icon getInspectorIcon() {
-        return getInspectorIcon(20);
+        return getInspectorIcon(16);
     }
 
     public static Icon getInspectorIcon(int size) {
-        return createDrawnInspectorIcon(size);
-    }
-
-    private static Icon createDrawnInspectorIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                boolean enabled = c == null || c.isEnabled();
-                Color lens = enabled ? new Color(0x6BB5FF) : ICON_DISABLED_COLOR;
-                Color handle = enabled ? new Color(0xEBEBEB) : ICON_DISABLED_COLOR;
-                float stroke = Math.max(1.4f, size / 10f);
-                g2.setStroke(new BasicStroke(stroke, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-                float s = size / 20f;
-                int cx = x + Math.round(9 * s);
-                int cy = y + Math.round(9 * s);
-                int r = Math.round(6 * s);
-
-                g2.setColor(lens);
-                g2.drawOval(cx - r, cy - r, r * 2, r * 2);
-
-                int hx = cx + Math.round(r * 0.65f);
-                int hy = cy + Math.round(r * 0.65f);
-                g2.setColor(handle);
-                g2.drawLine(hx, hy, hx + Math.round(5 * s), hy + Math.round(5 * s));
-
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    private static Icon createTintedResourceIcon(
-            String resourcePath, int size, Color enabledTint, Color disabledTint) {
-        URL url = UIManagerUtil.class.getResource(resourcePath);
-        if (url == null) {
-            return null;
-        }
-
-        Image source = new ImageIcon(url).getImage();
-        Image enabledImage = tintAndScale(source, size, enabledTint);
-        Image disabledImage = tintAndScale(source, size, disabledTint);
-
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Image image = c != null && !c.isEnabled() ? disabledImage : enabledImage;
-                g.drawImage(image, x, y, null);
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    private static Image tintAndScale(Image source, int size, Color tint) {
-        BufferedImage tinted = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = tinted.createGraphics();
-        g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.drawImage(source, 0, 0, size, size, null);
-        g2.setComposite(AlphaComposite.SrcAtop);
-        g2.setColor(tint);
-        g2.fillRect(0, 0, size, size);
-        g2.dispose();
-        return tinted;
-    }
-
-    private static Icon createDrawnRefreshIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
-                g2.setStroke(new BasicStroke(Math.max(1.2f, size / 12f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-                float s = size / 16f;
-                int cx = x + Math.round(8 * s);
-                int cy = y + Math.round(8 * s);
-                int r = Math.round(5 * s);
-
-                g2.drawArc(cx - r, cy - r, r * 2, r * 2, 45, 270);
-
-                int ax = cx + Math.round(4 * s);
-                int ay = cy - Math.round(5 * s);
-                g2.drawLine(ax, ay, ax + Math.round(3 * s), ay);
-                g2.drawLine(ax, ay, ax, ay + Math.round(3 * s));
-
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
+        return neutralIcon("search", size);
     }
 
     public static Icon getFolderIcon() {
@@ -286,55 +183,15 @@ public class UIManagerUtil {
     }
 
     public static Icon getFolderIcon(int size) {
-        Icon systemIcon = UIManager.getIcon("FileView.directoryIcon");
-        if (systemIcon instanceof ImageIcon imageIcon) {
-            if (imageIcon.getIconWidth() != size || imageIcon.getIconHeight() != size) {
-                Image scaled = imageIcon.getImage().getScaledInstance(size, size, Image.SCALE_SMOOTH);
-                return new ImageIcon(scaled);
-            }
-            return imageIcon;
-        }
-        if (systemIcon != null) {
-            return systemIcon;
-        }
-
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.isEnabled() ? new Color(0xEBEBEB) : new Color(0x888888));
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                float s = size / 16f;
-                int tabX = x + Math.round(3 * s);
-                int tabY = y + Math.round(4 * s);
-                int tabW = Math.round(6 * s);
-                int tabH = Math.round(3 * s);
-                int bodyX = x + Math.round(3 * s);
-                int bodyY = y + Math.round(6 * s);
-                int bodyW = Math.round(10 * s);
-                int bodyH = Math.round(8 * s);
-
-                g2.drawRoundRect(tabX, tabY, tabW, tabH, Math.round(1 * s), Math.round(1 * s));
-                g2.drawRoundRect(bodyX, bodyY, bodyW, bodyH, Math.round(2 * s), Math.round(2 * s));
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
+        return neutralIcon("folder-open", size);
     }
 
     public static Icon getTrashIcon() {
         return getTrashIcon(16);
+    }
+
+    public static Icon getTrashIcon(int size) {
+        return dangerIcon("ban", size);
     }
 
     public static Icon getBinIcon() {
@@ -342,7 +199,7 @@ public class UIManagerUtil {
     }
 
     public static Icon getBinIcon(int size) {
-        return createDrawnTrashIcon(size);
+        return dangerIcon("trash", size);
     }
 
     public static Icon getBackupIcon() {
@@ -350,45 +207,7 @@ public class UIManagerUtil {
     }
 
     public static Icon getBackupIcon(int size) {
-        return createDrawnBackupIcon(size);
-    }
-
-    private static Icon createDrawnBackupIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c == null || c.isEnabled() ? new Color(0x09b55d) : ICON_DISABLED_COLOR);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f), BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-
-                float s = size / 16f;
-                int boxX = x + Math.round(2.5f * s);
-                int boxY = y + Math.round(4 * s);
-                int boxW = Math.round(11 * s);
-                int boxH = Math.round(9 * s);
-                int lidY = y + Math.round(6.5f * s);
-
-                g2.drawRoundRect(boxX, boxY, boxW, boxH, Math.round(1.5f * s), Math.round(1.5f * s));
-                g2.drawLine(boxX, lidY, boxX + boxW, lidY);
-
-                int latchX = x + Math.round(8 * s);
-                g2.drawLine(latchX, boxY, latchX, lidY);
-                int tabW = Math.round(2 * s);
-                g2.drawRect(latchX - tabW, boxY - Math.round(1.5f * s), tabW * 2, Math.round(1.5f * s));
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
+        return neutralIcon("archive", size);
     }
 
     public static Icon getCopyIcon() {
@@ -396,7 +215,7 @@ public class UIManagerUtil {
     }
 
     public static Icon getCopyIcon(int size) {
-        return createDrawnCopyIcon(size);
+        return neutralIcon("copy", size);
     }
 
     public static Icon getLogFileIcon() {
@@ -404,7 +223,7 @@ public class UIManagerUtil {
     }
 
     public static Icon getLogFileIcon(int size) {
-        return createDrawnLogFileIcon(size);
+        return neutralIcon("file-text", size);
     }
 
     public static Icon getLogsFolderIcon() {
@@ -412,7 +231,7 @@ public class UIManagerUtil {
     }
 
     public static Icon getLogsFolderIcon(int size) {
-        return createDrawnLogsFolderIcon(size);
+        return neutralIcon("folder-logs", size);
     }
 
     public static Icon getClearLogArchivesIcon() {
@@ -420,235 +239,38 @@ public class UIManagerUtil {
     }
 
     public static Icon getClearLogArchivesIcon(int size) {
-        return createDrawnClearLogArchivesIcon(size);
+        return dangerIcon("files-x", size);
     }
 
-    private static Icon createDrawnClearLogArchivesIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                float s = size / 16f;
-                Color stroke = c.isEnabled() ? new Color(0xE57373) : ICON_DISABLED_COLOR;
-                g2.setColor(stroke);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                int doc1X = x + Math.round(3 * s);
-                int doc1Y = y + Math.round(2 * s);
-                int docW = Math.round(7 * s);
-                int docH = Math.round(9 * s);
-                g2.drawRoundRect(doc1X, doc1Y, docW, docH, Math.round(1 * s), Math.round(1 * s));
-                g2.drawRoundRect(doc1X + Math.round(2 * s), doc1Y + Math.round(1 * s),
-                        docW, docH, Math.round(1 * s), Math.round(1 * s));
-
-                int cx = x + Math.round(11 * s);
-                int cy = y + Math.round(11 * s);
-                int r = Math.round(3 * s);
-                g2.drawLine(cx - r, cy - r, cx + r, cy + r);
-                g2.drawLine(cx + r, cy - r, cx - r, cy + r);
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    private static Icon createDrawnLogFileIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                Color stroke = c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR;
-                g2.setColor(stroke);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                float s = size / 16f;
-                int docX = x + Math.round(3 * s);
-                int docY = y + Math.round(2 * s);
-                int docW = Math.round(10 * s);
-                int docH = Math.round(12 * s);
-                int foldX = x + Math.round(8 * s);
-                int r = Math.max(1, Math.round(1.5f * s));
-
-                g2.drawRoundRect(docX, docY, docW, docH, r, r);
-                g2.drawLine(foldX, docY, foldX, y + Math.round(6 * s));
-                g2.drawLine(foldX, y + Math.round(6 * s), docX + docW, y + Math.round(6 * s));
-
-                int lineLeft = docX + Math.round(2 * s);
-                int lineRight = docX + docW - Math.round(2 * s);
-                int lineY = y + Math.round(8 * s);
-                for (int i = 0; i < 3; i++) {
-                    g2.drawLine(lineLeft, lineY, lineRight - (i == 2 ? Math.round(2 * s) : 0), lineY);
-                    lineY += Math.round(2 * s);
-                }
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    private static Icon createDrawnLogsFolderIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                Color stroke = c.isEnabled() ? new Color(0x09b55d) : ICON_DISABLED_COLOR;
-                g2.setColor(stroke);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                float s = size / 16f;
-                int tabX = x + Math.round(2 * s);
-                int tabY = y + Math.round(4 * s);
-                int tabW = Math.round(6 * s);
-                int tabH = Math.round(3 * s);
-                int bodyX = x + Math.round(2 * s);
-                int bodyY = y + Math.round(6 * s);
-                int bodyW = Math.round(12 * s);
-                int bodyH = Math.round(8 * s);
-
-                g2.drawRoundRect(tabX, tabY, tabW, tabH, Math.round(1 * s), Math.round(1 * s));
-                g2.drawRoundRect(bodyX, bodyY, bodyW, bodyH, Math.round(2 * s), Math.round(2 * s));
-
-                int docX = bodyX + Math.round(3 * s);
-                int docY = bodyY + Math.round(2 * s);
-                g2.setColor(c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
-                g2.drawRoundRect(docX, docY, Math.round(5 * s), Math.round(4 * s), Math.round(1 * s), Math.round(1 * s));
-                g2.drawLine(docX + Math.round(1 * s), docY + Math.round(2 * s),
-                        docX + Math.round(4 * s), docY + Math.round(2 * s));
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    private static Icon createDrawnCopyIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.isEnabled() ? ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                float s = size / 16f;
-                int backX = x + Math.round(5 * s);
-                int backY = y + Math.round(3 * s);
-                int backW = Math.round(8 * s);
-                int backH = Math.round(9 * s);
-                int frontX = x + Math.round(3 * s);
-                int frontY = y + Math.round(5 * s);
-                int frontW = backW;
-                int frontH = backH;
-                int r = Math.max(1, Math.round(1.5f * s));
-
-                g2.drawRoundRect(backX, backY, backW, backH, r, r);
-                g2.drawRoundRect(frontX, frontY, frontW, frontH, r, r);
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
-    }
-
-    public static Icon getTrashIcon(int size) {
-        Icon resourceIcon = createTintedResourceIcon(
-                BROOM_ICON_PATH, size, CLEAR_ICON_ENABLED_COLOR, ICON_DISABLED_COLOR);
-        if (resourceIcon != null) {
-            return resourceIcon;
-        }
-        return createDrawnTrashIcon(size);
-    }
-
-    private static Icon createDrawnTrashIcon(int size) {
-        return new Icon() {
-            @Override
-            public void paintIcon(Component c, Graphics g, int x, int y) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(c.isEnabled() ? CLEAR_ICON_ENABLED_COLOR : ICON_DISABLED_COLOR);
-                g2.setStroke(new BasicStroke(Math.max(1f, size / 14f)));
-
-                float s = size / 16f;
-                int lidY = y + Math.round(4 * s);
-                int bodyX = x + Math.round(4 * s);
-                int bodyY = y + Math.round(5 * s);
-                int bodyW = Math.round(8 * s);
-                int bodyH = Math.round(9 * s);
-
-                g2.drawLine(x + Math.round(3 * s), lidY, x + Math.round(13 * s), lidY);
-                g2.drawLine(x + Math.round(6 * s), y + Math.round(2 * s), x + Math.round(10 * s), y + Math.round(2 * s));
-                g2.drawRoundRect(bodyX, bodyY, bodyW, bodyH, Math.round(2 * s), Math.round(2 * s));
-
-                int lineX1 = x + Math.round(6 * s);
-                int lineX2 = x + Math.round(8 * s);
-                int lineX3 = x + Math.round(10 * s);
-                int lineTop = bodyY + Math.round(2 * s);
-                int lineBottom = bodyY + bodyH - Math.round(2 * s);
-                g2.drawLine(lineX1, lineTop, lineX1, lineBottom);
-                g2.drawLine(lineX2, lineTop, lineX2, lineBottom);
-                g2.drawLine(lineX3, lineTop, lineX3, lineBottom);
-
-                g2.dispose();
-            }
-
-            @Override
-            public int getIconWidth() {
-                return size;
-            }
-
-            @Override
-            public int getIconHeight() {
-                return size;
-            }
-        };
+    public static Icon getGlobeIcon(int size) {
+        return neutralIcon("globe", size);
     }
 
     public static JPanel createPanelHeader(String title, JButton... actionButtons) {
-        JPanel header = new JPanel(new BorderLayout(6, 0));
+        JPanel header = new JPanel(new BorderLayout(8, 0));
         header.setOpaque(false);
+        header.setBorder(new EmptyBorder(0, 4, 6, 0));
+
+        JPanel titleBox = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        titleBox.setOpaque(false);
 
         JLabel label = new JLabel(title);
-        label.setFont(new Font("Arial", Font.BOLD, 15));
-        label.setForeground(PANEL_BORDER_COLOR);
+        label.putClientProperty("FlatLaf.style", "font: bold +1");
+        titleBox.add(label);
+
+        JLabel count = new BadgeLabel();
+        count.setVisible(false);
+        titleBox.add(Box.createHorizontalStrut(8));
+        titleBox.add(count);
+
         header.putClientProperty(PANEL_TITLE_LABEL_KEY, label);
-        header.add(label, BorderLayout.WEST);
+        header.putClientProperty(PANEL_COUNT_LABEL_KEY, count);
+        label.putClientProperty(PANEL_COUNT_LABEL_KEY, count);
+
+        JPanel titleWrap = new JPanel(new GridBagLayout());
+        titleWrap.setOpaque(false);
+        titleWrap.add(titleBox);
+        header.add(titleWrap, BorderLayout.WEST);
 
         if (actionButtons.length > 0) {
             JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
@@ -662,67 +284,46 @@ public class UIManagerUtil {
         return header;
     }
 
+    /**
+     * Скруглённая карточка с тонкой рамкой.
+     */
     public static void styleContentPanel(JComponent component) {
-        component.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(10, 10, 10, 10),
-                new RoundedLineBorder(PANEL_BORDER_COLOR, 1, PANEL_BORDER_RADIUS)
-        ));
+        styleContentPanel(component, MMRemoverTheme.cardBackground());
     }
 
-    public static void styleTitledBorder(JComponent component, String title) {
-        Border titledBorder = BorderFactory.createTitledBorder(
-                new RoundedLineBorder(PANEL_BORDER_COLOR, 1, PANEL_BORDER_RADIUS),
-                title,
-                TitledBorder.LEFT,
-                TitledBorder.TOP,
-                new Font("Arial", Font.BOLD, 15),
-                PANEL_BORDER_COLOR
-        );
-        component.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createEmptyBorder(10, 10, 10, 10),
-                titledBorder
-        ));
+    public static void styleContentPanel(JComponent component, Color background) {
+        // FlatPanelUI рисует скруглённый фон только у непрозрачной панели
+        // и только не-UIResource цвет: UIResource-фон FlatLaf перезаписывает своим
+        component.setOpaque(true);
+        component.setBackground(new Color(background.getRGB(), true));
+        component.putClientProperty("FlatLaf.style", "arc: " + CARD_ARC);
+        component.setBorder(new FlatLineBorder(
+                new Insets(10, 10, 10, 10), MMRemoverTheme.cardBorderColor(), 1, CARD_ARC));
     }
 
-    private static final class RoundedLineBorder implements Border {
-        private final Color color;
-        private final int thickness;
-        private final int radius;
-
-        private RoundedLineBorder(Color color, int thickness, int radius) {
-            this.color = color;
-            this.thickness = thickness;
-            this.radius = radius;
+    /**
+     * Небольшая «таблетка» со счётчиком рядом с заголовком панели.
+     */
+    private static final class BadgeLabel extends JLabel {
+        BadgeLabel() {
+            setBorder(new EmptyBorder(1, 8, 1, 8));
+            putClientProperty("FlatLaf.style", "font: -1");
         }
 
         @Override
-        public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
+        public Color getForeground() {
+            Color muted = MMRemoverTheme.mutedForeground();
+            return muted != null ? muted : super.getForeground();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color);
-            g2.setStroke(new BasicStroke(thickness));
-            float offset = thickness / 2f;
-            g2.draw(new RoundRectangle2D.Float(
-                    x + offset,
-                    y + offset,
-                    width - thickness,
-                    height - thickness,
-                    radius,
-                    radius
-            ));
+            g2.setColor(MMRemoverTheme.hoverBackground());
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), getHeight(), getHeight());
             g2.dispose();
-        }
-
-        @Override
-        public Insets getBorderInsets(Component c) {
-            int pad = thickness + 1;
-            return new Insets(pad, pad, pad, pad);
-        }
-
-        @Override
-        public boolean isBorderOpaque() {
-            return false;
+            super.paintComponent(g);
         }
     }
-
 }

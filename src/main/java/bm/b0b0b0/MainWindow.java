@@ -4,7 +4,9 @@ import bm.b0b0b0.util.AppLinks;
 import bm.b0b0b0.util.gui.Conf;
 import bm.b0b0b0.util.gui.ConfirmDeleteDialog;
 import bm.b0b0b0.util.gui.DragAndDropHandler;
+import bm.b0b0b0.util.gui.MMRemoverTheme;
 import bm.b0b0b0.util.gui.StyledButton;
+import bm.b0b0b0.util.gui.TipButton;
 import bm.b0b0b0.util.files.FileListCellRenderer;
 import bm.b0b0b0.util.files.FileListInteraction;
 import bm.b0b0b0.util.files.BackupManager;
@@ -44,14 +46,7 @@ public class MainWindow extends JFrame {
     private JTextArea consoleArea;
     private final Conf conf;
 
-    private static final Color COLOR_MAIN_BG         = Color.decode("#3c3f41");
-    private static final Color COLOR_CONSOLE_BG      = Color.BLACK;
-    private static final Color COLOR_CONSOLE_FG      = Color.WHITE;
-    private static final Color COLOR_PANEL_TITLE_BG  = Color.decode("#3c3f41");
-    private static final Color COLOR_LINK_PANEL_BG   = Color.decode("#3c3f41");
-    private static final Color COLOR_BUTTON_BG       = Color.decode("#3c3f41");
-    private static final Color COLOR_VISIT_LINK_FG   = Color.decode("#09b55d");
-
+    private JLabel statusPathLabel;
 
     public MainWindow(Conf conf) {
         this.conf = conf;
@@ -62,27 +57,22 @@ public class MainWindow extends JFrame {
 
     private void initializeUI() {
 
-        setTitle("MMRemover (v" + AppVersion.CURRENT + ")");
-        setSize(960, 600);
-        setMinimumSize(new Dimension(920, 420));
+        setTitle("MMRemover");
+        getRootPane().putClientProperty("JRootPane.titleBarShowTitle", false);
+        setMinimumSize(new Dimension(940, 560));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
 
         setWorkingDirectoryToJarLocation();
         setAppIcon();
-        try {
-            UIManager.setLookAndFeel("com.formdev.flatlaf.FlatDarkLaf");
-        } catch (Exception e) {
-            System.err.println(conf.getTranslation("no_black") + ": " + e.getMessage());
-        }
-        JPanel mainPanel = new JPanel(new BorderLayout());
-        mainPanel.setBackground(COLOR_MAIN_BG);
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 0));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(6, 16, 0, 16));
         add(mainPanel);
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.setBackground(COLOR_MAIN_BG);
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 10));
-        buttonPanel.setBackground(COLOR_BUTTON_BG);
-        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 0));
+        JPanel topPanel = new JPanel(new BorderLayout(16, 0));
+        topPanel.setOpaque(false);
+        topPanel.setBorder(BorderFactory.createEmptyBorder(4, 2, 14, 0));
+        topPanel.add(createBrandPanel(), BorderLayout.WEST);
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        buttonPanel.setOpaque(false);
         JButton removeAllButton = StyledButton.createModernButton(
                 conf.getTranslation("removeAllButton"),
                 UIManagerUtil.getEraserIcon(),
@@ -93,19 +83,13 @@ public class MainWindow extends JFrame {
                 StyledButton.Style.SECONDARY,
                 conf.getTranslation("refreshFilesButton")
         );
-        buttonPanel.add(removeAllButton);
-        topPanel.add(buttonPanel, BorderLayout.CENTER);
-
-        JPanel langPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        langPanel.setOpaque(false);
-        langPanel.setBackground(COLOR_BUTTON_BG);
-        langPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 8));
-        langPanel.add(LanguageSwitcher.create(conf, this::restartApplication));
-        topPanel.add(langPanel, BorderLayout.EAST);
+        JPanel buttonWrap = new JPanel(new GridBagLayout());
+        buttonWrap.setOpaque(false);
+        buttonWrap.add(buttonPanel);
+        topPanel.add(buttonWrap, BorderLayout.EAST);
         mainPanel.add(topPanel, BorderLayout.NORTH);
         JPanel inputPanel = new JPanel(new BorderLayout(0, 2));
-        inputPanel.setBackground(COLOR_PANEL_TITLE_BG);
-        inputList = new JList<>();
+        inputList = UIManagerUtil.createFileList(conf.getTranslation("inputEmptyHint"));
         inputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, pluginsDir.toString());
         inputList.setCellRenderer(new FileListCellRenderer(pluginsDir.toString(), conf));
         UIManagerUtil.enableListItemHover(inputList);
@@ -131,14 +115,12 @@ public class MainWindow extends JFrame {
                 inspectInputButton, openBackupsButton,
                 openInputFolderButton, clearInputListButton);
         inputPanelTitleLabel = (JLabel) inputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
-        inputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         inputPanel.add(inputHeader, BorderLayout.NORTH);
         inputPanel.add(inputScrollPane, BorderLayout.CENTER);
         UIManagerUtil.styleContentPanel(inputPanel);
         inputPanel.setPreferredSize(new Dimension(350, 250));
         JPanel outputPanel = new JPanel(new BorderLayout(0, 2));
-        outputPanel.setBackground(COLOR_PANEL_TITLE_BG);
-        outputList = new JList<>();
+        outputList = UIManagerUtil.createFileList(conf.getTranslation("outputEmptyHint"));
         outputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, "out");
         outputList.setCellRenderer(new FileListCellRenderer("out", conf));
         UIManagerUtil.enableListItemHover(outputList);
@@ -159,17 +141,21 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("outputPanelTitle"),
                 inspectOutputButton, openOutputFolderButton, clearOutputListButton);
         outputPanelTitleLabel = (JLabel) outputHeader.getClientProperty(UIManagerUtil.PANEL_TITLE_LABEL_KEY);
-        outputHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         outputPanel.add(outputHeader, BorderLayout.NORTH);
         outputPanel.add(outputScrollPane, BorderLayout.CENTER);
         UIManagerUtil.styleContentPanel(outputPanel);
         outputPanel.setPreferredSize(new Dimension(350, 250));
         JSplitPane fileSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, inputPanel, outputPanel);
         fileSplitPane.setResizeWeight(0.5);
-        fileSplitPane.setBackground(COLOR_MAIN_BG);
+        fileSplitPane.setBorder(null);
         consoleArea = new JTextArea(5, 20);
-        consoleArea.setBackground(COLOR_CONSOLE_BG);
-        consoleArea.setForeground(COLOR_CONSOLE_FG);
+        consoleArea.setEditable(false);
+        consoleArea.setLineWrap(true);
+        consoleArea.setWrapStyleWord(true);
+        consoleArea.setFont(MMRemoverTheme.monospaceFont(12.5f));
+        consoleArea.setBackground(MMRemoverTheme.consoleBackground());
+        consoleArea.setForeground(MMRemoverTheme.consoleForeground());
+        consoleArea.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
         AppLogger.get().bindConsole(consoleArea);
         AppLogger.get().openSession();
         AppLogger.get().log(String.format(conf.getTranslation("sessionStart"), AppVersion.CURRENT));
@@ -180,8 +166,8 @@ public class MainWindow extends JFrame {
         FileListInteraction.enableFileDelete(outputList, consoleArea, conf,
                 () -> refreshFilesList(outputList, "out"));
         JScrollPane consoleScrollPane = new JScrollPane(consoleArea);
+        consoleScrollPane.getViewport().setBackground(MMRemoverTheme.consoleBackground());
         JPanel consolePanel = new JPanel(new BorderLayout(0, 2));
-        consolePanel.setBackground(COLOR_MAIN_BG);
         JButton openLogFolderButton = UIManagerUtil.createIconButton(
                 UIManagerUtil.getLogsFolderIcon(),
                 conf.getTranslation("openLogFolderButtonTooltip")
@@ -206,58 +192,35 @@ public class MainWindow extends JFrame {
                 conf.getTranslation("consolePanelTitle"),
                 openLogFolderButton, openLogFileButton, clearLogArchivesButton,
                 copyConsoleButton, clearConsoleButton);
-        consoleHeader.setBorder(BorderFactory.createEmptyBorder(4, 8, 2, 4));
         consolePanel.add(consoleHeader, BorderLayout.NORTH);
         consolePanel.add(consoleScrollPane, BorderLayout.CENTER);
-        UIManagerUtil.styleContentPanel(consolePanel);
+        UIManagerUtil.styleContentPanel(consolePanel, MMRemoverTheme.consoleBackground());
         consoleScrollPane.setMinimumSize(new Dimension(0, 0));
         consolePanel.setMinimumSize(new Dimension(0, 120));
         consolePanel.setPreferredSize(new Dimension(0, 180));
         JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, fileSplitPane, consolePanel);
         mainSplitPane.setResizeWeight(0.0);
+        mainSplitPane.setBorder(null);
         mainPanel.add(mainSplitPane, BorderLayout.CENTER);
-        JPanel bottomPanel = new JPanel(new BorderLayout());
-        bottomPanel.setBackground(COLOR_MAIN_BG);
+        JPanel bottomPanel = new JPanel(new BorderLayout(12, 0));
+        bottomPanel.setOpaque(false);
+        bottomPanel.setBorder(BorderFactory.createEmptyBorder(6, 2, 6, 0));
 
-        JPanel linkPanel = new JPanel(new BorderLayout());
-        linkPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        linkPanel.setBackground(COLOR_LINK_PANEL_BG);
+        statusPathLabel = new JLabel();
+        statusPathLabel.setIcon(UIManagerUtil.svgIcon("folder", 13, MMRemoverTheme::mutedForeground));
+        statusPathLabel.setIconTextGap(6);
+        statusPathLabel.setForeground(MMRemoverTheme.mutedForeground());
+        statusPathLabel.putClientProperty("FlatLaf.style", "font: -1");
+        updateStatusPath();
+        bottomPanel.add(statusPathLabel, BorderLayout.CENTER);
 
-        JButton visitWebsiteButton = new JButton();
+        JButton visitWebsiteButton = createLinkButton(
+                conf.getTranslation("pageTitle"), loadScaledIcon("/icons/bm.png", 16));
         visitWebsiteButton.setToolTipText(conf.getTranslation("pageTitle"));
-        visitWebsiteButton.setBorderPainted(false);
-        visitWebsiteButton.setOpaque(false);
-        visitWebsiteButton.setBackground(null);
-        visitWebsiteButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        visitWebsiteButton.setFocusPainted(false);
 
-        try {
-            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bm.png")));
-            Image img = icon.getImage();
-            Image scaledImg = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-            visitWebsiteButton.setIcon(new ImageIcon(scaledImg));
-        } catch (Exception e) {
-            System.err.println(conf.getTranslation("Icon_not_found") + ": " + e.getMessage());
-        }
-
-        JButton botCheckButton = new JButton(conf.getTranslation("bot_bm"));
+        JButton botCheckButton = createLinkButton(
+                conf.getTranslation("bot_bm"), loadScaledIcon("/icons/bot.png", 16));
         botCheckButton.setToolTipText(conf.getTranslation("bot_bmTooltip"));
-        botCheckButton.setForeground(COLOR_VISIT_LINK_FG);
-        botCheckButton.setBorderPainted(false);
-        botCheckButton.setOpaque(false);
-        botCheckButton.setBackground(null);
-        botCheckButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        botCheckButton.setFocusPainted(false);
-
-        try {
-            ImageIcon icon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/icons/bot.png")));
-            Image img = icon.getImage();
-            Image scaledImg = img.getScaledInstance(16, 16, Image.SCALE_SMOOTH);
-            botCheckButton.setIcon(new ImageIcon(scaledImg));
-            botCheckButton.setIconTextGap(6);
-        } catch (Exception e) {
-            System.err.println("Icon not found: " + e.getMessage());
-        }
 
         botCheckButton.addActionListener(e -> {
             try {
@@ -275,13 +238,13 @@ public class MainWindow extends JFrame {
             }
         });
 
-        JPanel linksBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        JPanel linksBox = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         linksBox.setOpaque(false);
         linksBox.add(botCheckButton);
         linksBox.add(visitWebsiteButton);
+        linksBox.add(LanguageSwitcher.create(conf, this::restartApplication));
 
-        linkPanel.add(linksBox, BorderLayout.EAST);
-        bottomPanel.add(linkPanel, BorderLayout.CENTER);
+        bottomPanel.add(linksBox, BorderLayout.EAST);
         mainPanel.add(bottomPanel, BorderLayout.SOUTH);
         DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
         DragAndDropHandler.addDragAndDropSupport(outputList);
@@ -353,8 +316,9 @@ public class MainWindow extends JFrame {
                 UIManagerUtil.getFolderIcon(),
                 StyledButton.Style.SECONDARY);
         chooseFolderButton.setToolTipText(conf.getTranslation("chooseFolderButtonTooltip"));
-        buttonPanel.add(chooseFolderButton);
         buttonPanel.add(refreshFilesButton);
+        buttonPanel.add(chooseFolderButton);
+        buttonPanel.add(removeAllButton);
         chooseFolderButton.addActionListener(e -> {
             JFileChooser fc = new JFileChooser();
             fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
@@ -363,6 +327,7 @@ public class MainWindow extends JFrame {
                 logCurrentDirectory(String.format(conf.getTranslation("folderSelected"), pluginsDir));
                 inputList.putClientProperty(UIManagerUtil.LIST_DIRECTORY_PATH_KEY, pluginsDir.toString());
                 inputList.setCellRenderer(new FileListCellRenderer(pluginsDir.toString(), conf));
+                updateStatusPath();
                 refreshFilesList(inputList, pluginsDir.toString());
                 DragAndDropHandler.addDragAndDropSupport(inputList, consoleArea, pluginsDir.toString(), this::refreshFilesList, conf);
             }
@@ -434,17 +399,65 @@ public class MainWindow extends JFrame {
         logCurrentDirectory(conf.getTranslation("rel_file_start"));
         refreshFilesList(inputList, pluginsDir.toString());
         refreshFilesList(outputList, "out");
-        topPanel.revalidate();
-        topPanel.repaint();
-        mainPanel.revalidate();
-        mainPanel.repaint();
-        pack();
+        setSize(1120, 720);
+        setLocationRelativeTo(null);
         SwingUtilities.invokeLater(() -> {
-            mainSplitPane.setDividerLocation(0.68);
+            mainSplitPane.setDividerLocation(0.66);
             fileSplitPane.setDividerLocation(0.5);
         });
+    }
 
-        setVisible(true);
+    private JComponent createBrandPanel() {
+        JPanel brand = new JPanel(new GridBagLayout());
+        brand.setOpaque(false);
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.anchor = GridBagConstraints.WEST;
+
+        JLabel logo = new JLabel(loadScaledIcon("/icons/logo_tr.png", 34));
+        gc.gridheight = 2;
+        gc.insets = new Insets(0, 0, 0, 12);
+        brand.add(logo, gc);
+
+        JLabel name = new JLabel("MMRemover");
+        name.putClientProperty("FlatLaf.style", "font: bold +6");
+        gc.gridx = 1;
+        gc.gridheight = 1;
+        gc.insets = new Insets(0, 0, 0, 0);
+        brand.add(name, gc);
+
+        JLabel version = new JLabel("v" + AppVersion.CURRENT);
+        version.setForeground(MMRemoverTheme.mutedForeground());
+        version.putClientProperty("FlatLaf.style", "font: -1");
+        gc.gridy = 1;
+        brand.add(version, gc);
+        return brand;
+    }
+
+    private JButton createLinkButton(String text, Icon icon) {
+        JButton button = new TipButton(text, icon);
+        button.setFocusable(false);
+        button.setIconTextGap(6);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.putClientProperty("JButton.buttonType", "toolBarButton");
+        button.setForeground(MMRemoverTheme.mutedForeground());
+        button.putClientProperty("FlatLaf.style", "arc: 8; margin: 4,8,4,8; font: -1");
+        return button;
+    }
+
+    private Icon loadScaledIcon(String resource, int size) {
+        try {
+            Image img = new ImageIcon(Objects.requireNonNull(getClass().getResource(resource))).getImage();
+            return new ImageIcon(img.getScaledInstance(size, size, Image.SCALE_SMOOTH));
+        } catch (Exception e) {
+            System.err.println(conf.getTranslation("iconNotFound") + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private void updateStatusPath() {
+        if (statusPathLabel != null) {
+            statusPathLabel.setText(pluginsDir.toAbsolutePath().toString());
+        }
     }
 
 
@@ -590,7 +603,12 @@ public class MainWindow extends JFrame {
             return;
         }
         if (titleLabel != null) {
-            titleLabel.setText(String.format("%s (%d)", conf.getTranslation(titleKey), count));
+            titleLabel.setText(conf.getTranslation(titleKey));
+            JLabel countLabel = (JLabel) titleLabel.getClientProperty(UIManagerUtil.PANEL_COUNT_LABEL_KEY);
+            if (countLabel != null) {
+                countLabel.setText(String.valueOf(count));
+                countLabel.setVisible(true);
+            }
         }
     }
 
@@ -629,15 +647,8 @@ public class MainWindow extends JFrame {
     }
 
     private boolean confirmDangerousFolderDelete(String folderDisplay) {
-        int[] countdownSeconds = {5, 4, 3};
-        String[] stageKeys = {"dangerDeleteStage1", "dangerDeleteStage2", "dangerDeleteStage3"};
-        for (int stage = 0; stage < stageKeys.length; stage++) {
-            String message = String.format(conf.getTranslation(stageKeys[stage]), folderDisplay);
-            if (!ConfirmDeleteDialog.show(this, conf, message, countdownSeconds[stage])) {
-                return false;
-            }
-        }
-        return true;
+        String message = String.format(conf.getTranslation("dangerDeleteStage1"), folderDisplay);
+        return ConfirmDeleteDialog.show(this, conf, message, 5);
     }
 
     private void restartApplication() {
@@ -648,6 +659,7 @@ public class MainWindow extends JFrame {
     }
 
     public static void main(String[] args) {
+        MMRemoverTheme.setup();
         SwingUtilities.invokeLater(() -> {
             Conf conf = new Conf();
             new MainWindow(conf).setVisible(true);

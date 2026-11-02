@@ -1,66 +1,104 @@
 package bm.b0b0b0.util.files;
 
 import bm.b0b0b0.util.gui.Conf;
+import bm.b0b0b0.util.gui.MMRemoverTheme;
 import bm.b0b0b0.util.gui.UIManagerUtil;
 import bm.b0b0b0.util.log.AppLogger;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.io.File;
 
-public class FileListCellRenderer extends DefaultListCellRenderer {
+public class FileListCellRenderer extends JPanel implements ListCellRenderer<Object> {
+    private static final int ROW_ARC = 10;
+
     private final String directoryPath;
-    private final Color selectedBackgroundColor = Color.decode("#16181c");
     private final Conf conf;
+    private final JLabel nameLabel = new JLabel();
+    private final JLabel sizeLabel = new JLabel();
+    private final JLabel deleteLabel = new JLabel();
+    private final Icon jarIcon = UIManagerUtil.getJarFileIcon();
+    private final Icon folderIcon = UIManagerUtil.getFolderIcon();
+    private Color rowBackground;
+    private boolean selectedRow;
 
     public FileListCellRenderer(String directoryPath, Conf conf) {
+        super(new BorderLayout(10, 0));
         this.directoryPath = directoryPath;
         this.conf = conf;
+        setOpaque(false);
+        setBorder(new EmptyBorder(0, 10, 0, 4));
+
+        nameLabel.setIconTextGap(10);
+
+        sizeLabel.putClientProperty("FlatLaf.style", "font: -1");
+        sizeLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+
+        deleteLabel.setIcon(UIManagerUtil.getBinIcon(15));
+        deleteLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        deleteLabel.setPreferredSize(new Dimension(UIManagerUtil.LIST_DELETE_ZONE_WIDTH - 4, 0));
+        deleteLabel.setToolTipText(conf.getTranslation("deleteSelectedFileTooltip"));
+
+        JPanel east = new JPanel(new BorderLayout(6, 0));
+        east.setOpaque(false);
+        east.add(sizeLabel, BorderLayout.CENTER);
+        east.add(deleteLabel, BorderLayout.EAST);
+
+        add(nameLabel, BorderLayout.CENTER);
+        add(east, BorderLayout.EAST);
     }
 
     @Override
     public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-        JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-        label.setFont(new Font("Arial", Font.BOLD, 14));
-
         String fileName = value.toString();
-        String resolvedDirectoryPath = resolveDirectoryPath(list);
-        String filePath = resolvedDirectoryPath + File.separator + fileName;
+        String filePath = resolveDirectoryPath(list) + File.separator + fileName;
+        boolean isJar = fileName.endsWith(".jar");
 
-        if (fileName.endsWith(".jar")) {
-            label.setIcon(UIManagerUtil.getJarFileIcon());
+        nameLabel.setText(fileName);
+        nameLabel.setFont(list.getFont());
+        nameLabel.setForeground(list.getForeground());
+        nameLabel.setIcon(isJar ? jarIcon : folderIcon);
+        sizeLabel.setForeground(MMRemoverTheme.mutedForeground());
+        sizeLabel.setText("");
 
+        if (isJar) {
             File file = new File(filePath);
             if (file.exists() && file.isFile()) {
-                long fileSize = file.length();
-                String sizeText = getReadableFileSize(fileSize);
-                label.setText("<html>" + fileName + "<br><font size='2' color='gray'>[" + sizeText + "]</font></html>");
+                sizeLabel.setText(getReadableFileSize(file.length()));
             } else {
                 AppLogger.get().warn(conf.getTranslation("fileNotFoundOrNotFile"));
             }
+        }
+
+        Integer hoveredIndex = (Integer) list.getClientProperty(UIManagerUtil.LIST_HOVERED_INDEX_KEY);
+        boolean isHovered = hoveredIndex != null && hoveredIndex == index;
+        selectedRow = isSelected;
+        if (isSelected) {
+            rowBackground = MMRemoverTheme.selectedBackground();
+        } else if (isHovered) {
+            rowBackground = MMRemoverTheme.hoverBackground();
         } else {
-            label.setIcon(UIManager.getIcon("FileView.directoryIcon"));
+            rowBackground = null;
         }
+        deleteLabel.setVisible(isSelected && isJar);
+        return this;
+    }
 
-        applyBackground(label, list, index, isSelected);
-
-        if (isSelected && fileName.endsWith(".jar")) {
-            JPanel panel = new JPanel(new BorderLayout(4, 0));
-            panel.setOpaque(true);
-            panel.setBackground(label.getBackground());
-            panel.setForeground(label.getForeground());
-            label.setOpaque(false);
-            label.setBackground(null);
-            panel.add(label, BorderLayout.CENTER);
-
-            JLabel deleteIcon = new JLabel(UIManagerUtil.getBinIcon(14));
-            deleteIcon.setToolTipText(conf.getTranslation("deleteSelectedFileTooltip"));
-            deleteIcon.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
-            panel.add(deleteIcon, BorderLayout.EAST);
-            return panel;
+    @Override
+    protected void paintComponent(Graphics g) {
+        if (rowBackground == null) {
+            return;
         }
-
-        return label;
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setColor(rowBackground);
+        g2.fillRoundRect(0, 2, getWidth(), getHeight() - 4, ROW_ARC, ROW_ARC);
+        if (selectedRow) {
+            g2.setColor(MMRemoverTheme.accentColor());
+            g2.fillRoundRect(0, 9, 3, getHeight() - 18, 3, 3);
+        }
+        g2.dispose();
     }
 
     private String resolveDirectoryPath(JList<?> list) {
@@ -68,26 +106,13 @@ public class FileListCellRenderer extends DefaultListCellRenderer {
         return pathFromList != null ? pathFromList : directoryPath;
     }
 
-    private void applyBackground(JComponent component, JList<?> list, int index, boolean isSelected) {
-        if (isSelected) {
-            component.setBackground(selectedBackgroundColor);
-            component.setOpaque(true);
-        } else {
-            Integer hoveredIndex = (Integer) list.getClientProperty(UIManagerUtil.LIST_HOVERED_INDEX_KEY);
-            boolean isHovered = hoveredIndex != null && hoveredIndex == index;
-            if (isHovered) {
-                component.setBackground(UIManagerUtil.LIST_ITEM_HOVER_BACKGROUND);
-                component.setOpaque(true);
-            } else {
-                component.setBackground(list.getBackground());
-                component.setOpaque(false);
-            }
-        }
-    }
-
     private String getReadableFileSize(long size) {
-        long sizeInKB = size / 1024;
-        return sizeInKB + " KB";
+        if (size < 1024) {
+            return size + " B";
+        }
+        if (size < 1024 * 1024) {
+            return (size / 1024) + " KB";
+        }
+        return String.format("%.1f MB", size / (1024.0 * 1024.0));
     }
 }
-

@@ -5,9 +5,6 @@ import java.awt.*;
 
 public final class ConfirmDeleteDialog {
 
-    private static final Color BG = Color.decode("#3c3f41");
-    private static final Color DANGER = Color.decode("#E57373");
-
     private ConfirmDeleteDialog() {
     }
 
@@ -20,10 +17,8 @@ public final class ConfirmDeleteDialog {
 
         JPanel content = new JPanel(new BorderLayout(0, 14));
         content.setBorder(BorderFactory.createEmptyBorder(20, 24, 18, 24));
-        content.setBackground(BG);
 
         JLabel message = new JLabel(htmlMessage);
-        message.setForeground(Color.WHITE);
         content.add(message, BorderLayout.NORTH);
 
         JPanel center = new JPanel();
@@ -31,12 +26,11 @@ public final class ConfirmDeleteDialog {
         center.setOpaque(false);
 
         JLabel countdownLabel = new JLabel();
-        countdownLabel.setForeground(DANGER);
+        countdownLabel.setForeground(MMRemoverTheme.dangerColor());
         countdownLabel.setFont(countdownLabel.getFont().deriveFont(Font.BOLD, 13f));
         countdownLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JCheckBox agree = new JCheckBox(conf.getTranslation("dangerDeleteCheckbox"));
-        agree.setForeground(Color.WHITE);
         agree.setOpaque(false);
         agree.setEnabled(false);
         agree.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -46,9 +40,9 @@ public final class ConfirmDeleteDialog {
         center.add(agree);
         content.add(center, BorderLayout.CENTER);
 
-        JButton yes = new JButton(conf.getTranslation("dangerDeleteYes"));
+        JButton yes = StyledButton.createModernButton(conf.getTranslation("dangerDeleteYes"), null, StyledButton.Style.DANGER);
         yes.setEnabled(false);
-        JButton cancel = new JButton(conf.getTranslation("dangerDeleteCancel"));
+        JButton cancel = StyledButton.createModernButton(conf.getTranslation("dangerDeleteCancel"), null, StyledButton.Style.SECONDARY);
 
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         buttons.setOpaque(false);
