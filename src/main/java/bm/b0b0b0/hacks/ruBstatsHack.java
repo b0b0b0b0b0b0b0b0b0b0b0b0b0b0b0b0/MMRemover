@@ -1,5 +1,6 @@
 package bm.b0b0b0.hacks;
 
+import bm.b0b0b0.util.files.CleanOutput;
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
 import bm.b0b0b0.util.files.CleanPipeline;
 import bm.b0b0b0.util.files.JarEntryUtils;
@@ -174,15 +175,7 @@ public class ruBstatsHack {
             }
         }
 
-        File outFile = CleanPipeline.outputFile(outputDir, file.getName());
-        b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
-        JarEntryUtils.writeJar(outFile, removeEmptyDirectories(filtered));
-
-        if (outFile.length() > 0) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outFile.getAbsolutePath()));
-        } else {
-            b0b0b0Dick.log(String.format(conf.getTranslation("failedToCreateCleanFile"), outFile.getAbsolutePath()));
-        }
+        CleanOutput.write(outputDir, file.getName(), removeEmptyDirectories(filtered), conf);
     }
 
     private MalwareJarContext buildMalwareContext(File file, List<JarEntryUtils.Entry> entries) {

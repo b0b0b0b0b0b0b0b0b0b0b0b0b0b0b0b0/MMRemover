@@ -15,6 +15,7 @@
 - ruBstatsHack (`ru/bstats`, `me/bstats` + `bstats.xyz`)
 - **SystemMetrics** (`panel.bstats.co`)
 - **KtoDropper** (`lib/metrics/Boot`, `META-INF/m.bin`, `kto.ultimatebox.fun`)
+- **Бэкдор в PAPI-расширении**: `register()` запускает свой класс с поддельной консолью, сетью и обфускацией. Ищется по поведению, а не по именам классов
 
 ## SystemMetrics — чаморы и `panel.bstats.co`
 

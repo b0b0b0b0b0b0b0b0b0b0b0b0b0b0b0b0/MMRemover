@@ -1,5 +1,6 @@
 package bm.b0b0b0.hacks;
 
+import bm.b0b0b0.util.files.CleanOutput;
 import javax.swing.JTextArea;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -145,11 +146,7 @@ public class HostFlow {
             throw e;
         }
 
-        if (outputFile.exists() && outputFile.length() > 0) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outputFile.getAbsolutePath()));
-        } else {
-            b0b0b0Dick.log(String.format(conf.getTranslation("failedToCreateCleanFile"), outputFile.getAbsolutePath()));
-        }
+        CleanOutput.report(outputFile, conf);
     }
 
     private void processClassEntry(ZipFile zip, ZipOutputStream out, ZipEntry zipEntry,

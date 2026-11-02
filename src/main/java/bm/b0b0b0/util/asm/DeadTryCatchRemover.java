@@ -106,10 +106,26 @@ public final class DeadTryCatchRemover {
             if (!(insn instanceof JumpInsnNode jump) || jump.getOpcode() != Opcodes.GOTO) {
                 continue;
             }
-            if (isOrphanHandlerLabel(jump.label)) {
+            if (!isOrphanHandlerLabel(jump.label)) {
+                continue;
+            }
+            AbstractInsnNode target = firstRealAfter(jump.label);
+            if (target != null) {
+                method.instructions.set(jump, new InsnNode(target.getOpcode()));
+            } else {
                 replaceJumpWithReturn(method, jump);
             }
         }
+    }
+
+    private static AbstractInsnNode firstRealAfter(LabelNode label) {
+        for (AbstractInsnNode insn = label; insn != null; insn = insn.getNext()) {
+            if (insn instanceof LabelNode || insn instanceof LineNumberNode || insn instanceof FrameNode) {
+                continue;
+            }
+            return insn;
+        }
+        return null;
     }
 
     private static boolean isOrphanHandlerLabel(LabelNode label) {

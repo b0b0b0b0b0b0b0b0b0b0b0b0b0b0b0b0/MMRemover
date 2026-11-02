@@ -1,5 +1,6 @@
 package bm.b0b0b0.hacks;
 
+import bm.b0b0b0.util.files.CleanResult;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import org.objectweb.asm.ClassReader;
 
@@ -11,15 +12,14 @@ import java.util.Set;
 
 public final class KtoDropperCleaner {
 
-    public record Result(
-            boolean infected,
-            String error,
-            int sites,
-            List<String> removed,
-            List<String> patched,
-            List<JarEntryUtils.Entry> entries
-    ) {
-    }
+    public static final CleanerSpec SPEC = new CleanerSpec(
+            KtoDropperMalwareDetector.REPORT,
+            "infectionKtoDropper",
+            "ktoDropperNeutralized",
+            "ktoDropperUnsafe",
+            KtoDropperCleaner::infected,
+            KtoDropperCleaner::clean
+    );
 
     private KtoDropperCleaner() {
     }
@@ -28,11 +28,11 @@ public final class KtoDropperCleaner {
         return !owners(entries).isEmpty() || hasBlob(entries);
     }
 
-    public static Result clean(List<JarEntryUtils.Entry> entries) {
+    public static CleanResult clean(List<JarEntryUtils.Entry> entries) {
         Set<String> droppers = owners(entries);
         boolean blob = hasBlob(entries);
         if (droppers.isEmpty() && !blob) {
-            return new Result(false, null, 0, List.of(), List.of(), entries);
+            return CleanResult.notInfected(entries);
         }
 
         List<String> removed = new ArrayList<>();
@@ -53,9 +53,7 @@ public final class KtoDropperCleaner {
                 KtoDropperMalwareDetector.Patch patch =
                         KtoDropperMalwareDetector.neutralizeCalls(entry.data(), droppers);
                 if (patch == null) {
-                    return new Result(true,
-                            "unsafe call in " + entry.name(),
-                            0, List.of(), List.of(), entries);
+                    return CleanResult.unsafe(entries, "unsafe call in " + entry.name());
                 }
                 if (patch.sites() > 0) {
                     sites += patch.sites();
@@ -75,7 +73,7 @@ public final class KtoDropperCleaner {
             }
             finished.add(entry);
         }
-        return new Result(true, null, sites, List.copyOf(removed), List.copyOf(patched), finished);
+        return new CleanResult(true, null, sites, List.copyOf(removed), List.copyOf(patched), finished);
     }
 
     private static Set<String> owners(List<JarEntryUtils.Entry> entries) {

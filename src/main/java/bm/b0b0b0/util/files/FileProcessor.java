@@ -11,7 +11,7 @@ import java.util.List;
 public class FileProcessor {
 
     private static final String[] ALL_TYPES = {
-            "ktoDropper",
+            "ktoDropper", "papiExpansion",
             "hostflow", "artemka", "bstatsjar", "pluginmetrics", "aph",
             "ruBstatsHack", "systemMetricsHack", "chbkHack"
     };
@@ -96,7 +96,9 @@ public class FileProcessor {
 
     private static void runHack(Path inputPath, Path outputPath, String type, JTextArea consoleArea, Conf conf) {
         if ("ktoDropper".equalsIgnoreCase(type)) {
-            new KtoDropperHack(inputPath, outputPath, true, consoleArea, conf);
+            new EntryCleanerHack(KtoDropperCleaner.SPEC, inputPath, outputPath, true, consoleArea, conf);
+        } else if ("papiExpansion".equalsIgnoreCase(type)) {
+            new EntryCleanerHack(PapiExpansionCleaner.SPEC, inputPath, outputPath, true, consoleArea, conf);
         } else if ("hostflow".equalsIgnoreCase(type)) {
             new HostFlow(inputPath, outputPath, true, consoleArea, conf);
         } else if ("artemka".equalsIgnoreCase(type)) {

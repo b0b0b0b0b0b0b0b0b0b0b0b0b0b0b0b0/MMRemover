@@ -1,7 +1,9 @@
 package bm.b0b0b0.hacks;
 
 import bm.b0b0b0.hacks.RussianHuy.b0b0b0Dick;
+import bm.b0b0b0.util.files.CleanOutput;
 import bm.b0b0b0.util.files.CleanPipeline;
+import bm.b0b0b0.util.files.CleanResult;
 import bm.b0b0b0.util.files.JarEntryUtils;
 import bm.b0b0b0.util.gui.Conf;
 
@@ -17,17 +19,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class KtoDropperHack {
+public class EntryCleanerHack {
 
     private final List<String> infectedFiles = new CopyOnWriteArrayList<>();
+    private final CleanerSpec spec;
     private final Path outputPath;
     private final ExecutorService executor;
     private final Conf conf;
 
-    public KtoDropperHack(Path pluginsPath, Path outputPath,
-                          boolean removeMalware,
-                          JTextArea consoleArea,
-                          Conf conf) {
+    public EntryCleanerHack(CleanerSpec spec, Path pluginsPath, Path outputPath,
+                            boolean removeMalware,
+                            JTextArea consoleArea,
+                            Conf conf) {
+        this.spec = spec;
         this.conf = conf;
         this.outputPath = outputPath;
         this.executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
@@ -77,7 +81,7 @@ public class KtoDropperHack {
         try {
             b0b0b0Dick.log(String.format(conf.getTranslation("scanningFiles"), file.getName()));
             List<JarEntryUtils.Entry> entries = JarEntryUtils.readDeduped(file);
-            if (KtoDropperCleaner.infected(entries)) {
+            if (spec.detector().test(entries)) {
                 tagInfected(file);
             }
         } catch (Throwable throwable) {
@@ -90,10 +94,7 @@ public class KtoDropperHack {
             return;
         }
         infectedFiles.add(file.getAbsolutePath());
-        b0b0b0Dick.log(String.format(
-                conf.getTranslation("infectionKtoDropper"),
-                KtoDropperMalwareDetector.REPORT,
-                file.getName()));
+        b0b0b0Dick.log(String.format(conf.getTranslation(spec.infectionKey()), spec.report(), file.getName()));
     }
 
     private void runRemover(File file, File outputDir) throws IOException {
@@ -103,12 +104,12 @@ public class KtoDropperHack {
 
         File src = CleanPipeline.sourceFile(file, outputDir);
         List<JarEntryUtils.Entry> entries = JarEntryUtils.readDeduped(src);
-        KtoDropperCleaner.Result result = KtoDropperCleaner.clean(entries);
+        CleanResult result = spec.cleaner().apply(entries);
         if (!result.infected()) {
             return;
         }
         if (result.error() != null) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("ktoDropperUnsafe"), file.getName(), result.error()));
+            b0b0b0Dick.log(String.format(conf.getTranslation(spec.unsafeKey()), file.getName(), result.error()));
             return;
         }
 
@@ -116,16 +117,9 @@ public class KtoDropperHack {
             b0b0b0Dick.log(String.format(conf.getTranslation("removingFile"), name));
         }
         for (String name : result.patched()) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("ktoDropperNeutralized"), name, result.sites()));
+            b0b0b0Dick.log(String.format(conf.getTranslation(spec.neutralizedKey()), name, result.sites()));
         }
 
-        File outFile = CleanPipeline.outputFile(outputDir, file.getName());
-        b0b0b0Dick.log(String.format(conf.getTranslation("creatingCleanFile"), outFile.getAbsolutePath()));
-        JarEntryUtils.writeJar(outFile, new ArrayList<>(result.entries()));
-        if (outFile.length() > 0) {
-            b0b0b0Dick.log(String.format(conf.getTranslation("cleanFileCreatedSuccessfully"), outFile.getAbsolutePath()));
-        } else {
-            b0b0b0Dick.log(String.format(conf.getTranslation("failedToCreateCleanFile"), outFile.getAbsolutePath()));
-        }
+        CleanOutput.write(outputDir, file.getName(), new ArrayList<>(result.entries()), conf);
     }
 }
